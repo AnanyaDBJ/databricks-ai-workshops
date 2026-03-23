@@ -1,0 +1,75 @@
+bundle:
+  name: retail_grocery_ltm_memory
+
+resources:
+  apps:
+    retail_grocery_ltm_memory:
+      name: "retail-grocery-ltm-memory"
+      description: "Retail grocery conversational agent with Genie, Vector Search, and long-term memory"
+      source_code_path: ./
+      config:
+        command: ["uv", "run", "start-app"]
+        env:
+          - name: MLFLOW_TRACKING_URI
+            value: "databricks"
+          - name: MLFLOW_REGISTRY_URI
+            value: "databricks-uc"
+          - name: API_PROXY
+            value: "http://localhost:8000/invocations"
+          - name: CHAT_APP_PORT
+            value: "3000"
+          - name: CHAT_PROXY_TIMEOUT_SECONDS
+            value: "300"
+          - name: MLFLOW_EXPERIMENT_ID
+            value_from: "experiment"
+          # TODO: Replace with your Lakebase instance name
+          - name: LAKEBASE_INSTANCE_NAME
+            value: "<your-lakebase-instance-name>"
+          # TODO: Replace with your Genie Space ID
+          - name: GENIE_SPACE_ID
+            value: "<your-genie-space-id>"
+          # TODO: Replace with your Vector Search index (catalog/schema/index-name)
+          - name: VECTOR_SEARCH_INDEX
+            value: "<catalog>/<schema>/<vector-search-index>"
+
+      # Resources which this app has access to
+      resources:
+        # TODO: Replace experiment_id with your MLflow experiment ID
+        - name: "experiment"
+          experiment:
+            experiment_id: "<your-experiment-id>"
+            permission: "CAN_MANAGE"
+        # TODO: Replace space_id with your Genie Space ID
+        - name: "retail_grocery_genie"
+          genie_space:
+            name: "Retail Grocery Data"
+            space_id: "<your-genie-space-id>"
+            permission: "CAN_RUN"
+        # TODO: Replace instance_name with your Lakebase instance name
+        - name: "lakebase_memory"
+          database:
+            instance_name: "<your-lakebase-instance-name>"
+            database_name: "databricks_postgres"
+            permission: "CAN_CONNECT_AND_CREATE"
+        # TODO: Replace with your Vector Search index full name
+        - name: "policy_docs_index"
+          uc_securable:
+            securable_full_name: "<catalog>.<schema>.<vector-search-index>"
+            securable_type: "TABLE"
+            permission: "SELECT"
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/retail_grocery_ltm_memory/${bundle.target}
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/retail_grocery_ltm_memory/${bundle.target}
+    resources:
+      apps:
+        retail_grocery_ltm_memory:
+          name: retail-grocery-ltm-memory

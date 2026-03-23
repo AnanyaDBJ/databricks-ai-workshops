@@ -1,0 +1,24 @@
+command: ["uv", "run", "start-app"]
+
+env:
+  - name: MLFLOW_TRACKING_URI
+    value: "databricks"
+  - name: MLFLOW_REGISTRY_URI
+    value: "databricks-uc"
+  - name: API_PROXY
+    value: "http://localhost:8000/invocations"
+  - name: CHAT_APP_PORT
+    value: "3000"
+  - name: CHAT_PROXY_TIMEOUT_SECONDS
+    value: "300"
+  - name: MLFLOW_EXPERIMENT_ID
+    valueFrom: experiment
+  # TODO: Replace with your Lakebase instance name
+  - name: LAKEBASE_INSTANCE_NAME
+    value: "<your-lakebase-instance-name>"
+  # TODO: Replace with your Genie Space ID
+  - name: GENIE_SPACE_ID
+    value: "<your-genie-space-id>"
+  # TODO: Replace with your Vector Search index (catalog/schema/index-name)
+  - name: VECTOR_SEARCH_INDEX
+    value: "<catalog>/<schema>/<vector-search-index>"
