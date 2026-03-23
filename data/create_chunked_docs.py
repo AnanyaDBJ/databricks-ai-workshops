@@ -9,7 +9,7 @@ Prerequisites:
     1. Upload policy docs to UC Volume:
        databricks fs cp ./synthetic_data/policy_docs/ dbfs:/Volumes/ananyaroy/retail_wiab/policy_docs/ --recursive --profile <profile>
 
-Target table: ananyaroy.retail_wiab.policy_docs_chunked
+Target table: <CATALOG>.<SCHEMA>.policy_docs_chunked
 """
 
 import hashlib
@@ -18,8 +18,8 @@ import os
 from pyspark.sql import SparkSession
 
 # ── Config ──────────────────────────────────────────────────────────
-CATALOG = "ananyaroy"
-SCHEMA = "retail_wiab"
+CATALOG = "qsic_workshop_prep_catalog"
+SCHEMA = "retail_agent"
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
 VOLUME_PATH = f"/Volumes/{CATALOG}/{SCHEMA}/policy_docs"
 TARGET_TABLE = f"{FULL_SCHEMA}.policy_docs_chunked"

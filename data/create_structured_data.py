@@ -1,4 +1,4 @@
-"""
+""" 
 Generate synthetic retail grocery data and write to Unity Catalog tables.
 
 Usage:
@@ -7,7 +7,7 @@ Usage:
 
     Or locally with PySpark + Unity Catalog connectivity.
 
-Target schema: ananyaroy.retail_wiab
+Target schema: <CATALOG>.<SCHEMA>
 """
 
 import json
@@ -27,9 +27,9 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-# ── Config ──────────────────────────────────────────────────────────
-CATALOG = "ananyaroy"
-SCHEMA = "retail_wiab"
+# ── TO DO Change the ──────────────────────────────────────────────────────────
+CATALOG = "qsic_workshop_prep_catalog"
+SCHEMA = "retail_agent"
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
 
 spark = SparkSession.builder.getOrCreate()
@@ -301,7 +301,7 @@ for txn_id in range(1, 2001):
     total = 0.0
     for prod in txn_products:
         qty = random.randint(1, 5)
-        discount = round(random.choice([0, 0, 0, 0.5, 1.0, 1.5, 2.0]), 2)
+        discount = round(random.choice([0.0, 0.0, 0.0, 0.5, 1.0, 1.5, 2.0]), 2)
         unit_price = prod["price"]
         line_total = round(qty * unit_price - discount, 2)
         total += line_total
@@ -310,7 +310,7 @@ for txn_id in range(1, 2001):
             "item_id": f"ITEM-{item_id:06d}",
             "transaction_id": f"TXN-{txn_id:05d}",
             "product_id": prod["product_id"],
-            "quantity": qty,
+            "quantity": float(qty),
             "unit_price": unit_price,
             "discount": discount,
         })
