@@ -1,10 +1,10 @@
 # Build AI Agents That Actually Work in Production
 
-> **Stop building toy demos.** Start building governed, production-ready AI agents on Databricks — from zero to deployed, with everything in between.
+> **Stop building toy demos.** Start building governed, production-ready AI agents on Databricks, from zero to deployed, with everything in between.
 
-Most AI agent tutorials end at "it works on my laptop." This workshop series takes you all the way to **production** — with evaluation, governance, human-in-the-loop feedback, and monitoring baked in from day one.
+This workshop series takes you all the way to **production** — with evaluation, governance, human-in-the-loop feedback, and monitoring baked in from day one.
 
-Three levels. One mission: **make you dangerous with AI agents on Databricks.**
+Three levels. One mission: **make you define smareter and practical AI agents ( On Databricks). **
 
 ## Choose Your Path
 
