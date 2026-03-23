@@ -68,8 +68,16 @@ LAKEBASE_AUTOSCALING_BRANCH = os.getenv("LAKEBASE_AUTOSCALING_BRANCH") or None
 GENIE_SPACE_ID = os.getenv("GENIE_SPACE_ID", "")
 # TODO: Set via VECTOR_SEARCH_INDEX env var or replace default here
 # Format: <catalog>/<schema>/<index-name>
-VECTOR_SEARCH_INDEX = os.getenv("VECTOR_SEARCH_INDEX", "")
+# VECTOR_SEARCH_INDEX = os.getenv("VECTOR_SEARCH_INDEX", "")
 
+_VECTOR_SEARCH_INDEX_RAW = os.getenv("VECTOR_SEARCH_INDEX", "")
+# Support both slash (catalog/schema/index) and dot (catalog.schema.index) formats
+# Dot format comes from Databricks Apps valueFrom injection of uc_securable resources
+VECTOR_SEARCH_INDEX = (
+    _VECTOR_SEARCH_INDEX_RAW.replace(".", "/")
+    if "." in _VECTOR_SEARCH_INDEX_RAW and "/" not in _VECTOR_SEARCH_INDEX_RAW
+    else _VECTOR_SEARCH_INDEX_RAW
+)
 ############################################
 
 _has_autoscaling = LAKEBASE_AUTOSCALING_PROJECT and LAKEBASE_AUTOSCALING_BRANCH
