@@ -1,6 +1,6 @@
 # Build AI Agents That Actually Work in Production
 
-> **Stop building toy demos.** Start building governed, production-ready AI agents on Databricks, from zero to deployed, with everything in between.
+> ** A practical guide to build Production-ready AI application and not toy demos that work well on your computer.** Start building governed, production-ready AI agents on Databricks, from zero to deployed, with everything in between.
 
 This workshop series takes you all the way to **production** — with evaluation, governance, human-in-the-loop feedback, and monitoring baked in from day one.
 
