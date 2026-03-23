@@ -10,8 +10,8 @@ This folder contains scripts and source documents to generate all the data requi
 ```
 data/
 ├── README.md
-├── create_structured_data.py     # Databricks notebook — generates structured tables via PySpark
-├── create_chunked_docs.py        # Databricks notebook — chunks policy docs via PySpark
+├── create_structured_data.py     # PySpark script — generates structured tables (run on cluster or locally)
+├── create_chunked_docs.py        # PySpark script — chunks policy docs (requires UC Volumes access)
 ├── execute_sql.py                # Local script — generates structured tables via SQL REST API
 ├── execute_chunking.py           # Local script — chunks policy docs via SQL REST API
 ├── run_sql_generation.py         # Local script — generates structured tables via Databricks CLI
@@ -35,7 +35,7 @@ Creates 6 tables: `customers` (200 rows), `products` (~500), `stores` (10), `tra
 
 | Script | Runs On | Method |
 |--------|---------|--------|
-| `create_structured_data.py` | Databricks cluster (notebook) | PySpark DataFrames |
+| `create_structured_data.py` | Databricks cluster or local with PySpark | PySpark DataFrames |
 | `execute_sql.py` | Local machine | SQL via REST API (`urllib`) |
 | `run_sql_generation.py` | Local machine | SQL via `databricks api` CLI |
 
@@ -45,7 +45,7 @@ Reads the 7 markdown files from `policy_docs/`, splits them into overlapping chu
 
 | Script | Runs On | Method |
 |--------|---------|--------|
-| `create_chunked_docs.py` | Databricks cluster (notebook) | PySpark + UC Volumes |
+| `create_chunked_docs.py` | Databricks cluster or local with PySpark | PySpark + UC Volumes |
 | `execute_chunking.py` | Local machine | SQL via REST API (`urllib`) |
 
 ## TODO: What to Change for a New Workspace
@@ -69,7 +69,7 @@ Files to update:
 ### Prerequisites for the New Workspace
 
 - [ ] Create the target catalog and schema in Unity Catalog
-- [ ] For notebook scripts: import into a Databricks workspace and attach to a cluster
+- [ ] For PySpark scripts: run on a Databricks cluster (e.g. via `databricks jobs submit`) or locally with PySpark + UC connectivity
 - [ ] For `create_chunked_docs.py`: create a UC Volume and upload `policy_docs/*.md` files:
   ```bash
   databricks fs cp ./policy_docs/ dbfs:/Volumes/<CATALOG>/<SCHEMA>/policy_docs/ --recursive --profile <profile>
