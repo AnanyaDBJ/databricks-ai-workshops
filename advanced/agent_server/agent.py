@@ -66,6 +66,8 @@ LAKEBASE_AUTOSCALING_BRANCH = os.getenv("LAKEBASE_AUTOSCALING_BRANCH") or None
 
 # TODO: Set via GENIE_SPACE_ID env var or replace default here
 GENIE_SPACE_ID = os.getenv("GENIE_SPACE_ID", "")
+# Prompt Registry: set to load system prompt from Unity Catalog instead of hardcoded string
+PROMPT_REGISTRY_NAME = os.getenv("PROMPT_REGISTRY_NAME", "")
 # TODO: Set via VECTOR_SEARCH_INDEX env var or replace default here
 # Format: <catalog>/<schema>/<index-name>
 # VECTOR_SEARCH_INDEX = os.getenv("VECTOR_SEARCH_INDEX", "")
@@ -98,7 +100,7 @@ class StatefulAgentState(TypedDict, total=False):
     custom_inputs: dict[str, Any]
     custom_outputs: dict[str, Any]
 
-
+#This is for backup only , the agent refers prompt registry for system prompt
 SYSTEM_PROMPT = """You are a friendly and knowledgeable FreshMart grocery shopping assistant. Your role is to help customers with their grocery shopping needs, answer questions about products and purchases, and provide information about store policies.
 
 ## Your Capabilities
@@ -159,6 +161,14 @@ You can also remember what tasks you helped with and what conversations you had:
 - If you don't have enough information to answer, ask clarifying questions rather than guessing"""
 
 
+def load_system_prompt() -> str:
+    """Load system prompt from Databricks Prompt Registry if configured, otherwise use hardcoded default."""
+    if PROMPT_REGISTRY_NAME:
+        prompt = mlflow.genai.load_prompt(f"prompts:/{PROMPT_REGISTRY_NAME}@production")
+        return prompt.format()
+    return SYSTEM_PROMPT
+
+
 def init_mcp_client(workspace_client: WorkspaceClient) -> DatabricksMultiServerMCPClient:
     host_name = get_databricks_host_from_env()
     return DatabricksMultiServerMCPClient(
@@ -193,7 +203,7 @@ async def init_agent(
     return create_agent(
         model=ChatDatabricks(endpoint=LLM_ENDPOINT_NAME),
         tools=tools,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=load_system_prompt(),
         store=store,
         checkpointer=checkpointer,
         state_schema=StatefulAgentState,
