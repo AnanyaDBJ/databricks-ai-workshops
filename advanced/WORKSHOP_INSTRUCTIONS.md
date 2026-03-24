@@ -23,6 +23,7 @@ You should have these values ready:
 | Genie Space ID | `01ef...abcd` | Genie UI > your space > URL contains the ID |
 | Lakebase instance name | `my-lakebase-instance` | Catalog Explorer > Databases |
 | Vector Search index path | `my_catalog.my_schema.policy_docs_index` | Catalog Explorer > your index |
+| Catalog and schema | `my_catalog.my_schema` | Unity Catalog > your catalog and schema |
 
 ---
 
@@ -41,6 +42,8 @@ Verify your `app.yaml` looks like this (no changes needed if it already does):
     valueFrom: retail_grocery_genie
   - name: VECTOR_SEARCH_INDEX
     valueFrom: policy_docs_index
+  - name: PROMPT_REGISTRY_NAME
+    valueFrom: system_prompt
 ```
 
 > **How `valueFrom` works:** Each name (e.g., `lakebase_memory`) references a resource defined in `databricks.yml`. At deploy time, the platform resolves the resource and injects the appropriate value (hostname, space ID, etc.) into the environment variable.
@@ -66,6 +69,8 @@ In the `config.env` section (around lines 23-33), ensure the three resource-back
             value_from: "retail_grocery_genie"
           - name: VECTOR_SEARCH_INDEX
             value_from: "policy_docs_index"
+          - name: PROMPT_REGISTRY_NAME
+            value_from: "system_prompt"
 ```
 
 > **Note:** `databricks.yml` uses `value_from` (underscore). `app.yaml` uses `valueFrom` (camelCase). Both are correct — they're different file formats.
@@ -101,11 +106,35 @@ In the `resources` section (around lines 36-59), replace the placeholder values 
             permission: "SELECT"
 ```
 
+**Prompt Registry** (system prompt in Unity Catalog):
+```yaml
+        - name: "system_prompt"
+          uc_securable:
+            securable_full_name: "<YOUR-CATALOG>.<YOUR-SCHEMA>.freshmart_system_prompt"
+            securable_type: "FUNCTION"
+            permission: "EXECUTE"
+```
+
 > **Important:** The `securable_full_name` uses **dots** (e.g., `my_catalog.my_schema.policy_docs_index`), not slashes.
 
 ---
 
-## Step 3: Create an MLflow Experiment
+## Step 3: Register the System Prompt
+
+The agent loads its system prompt from the Databricks Prompt Registry (Unity Catalog). Register it by running:
+
+```bash
+cd advanced
+uv run register-prompt --name <YOUR-CATALOG>.<YOUR-SCHEMA>.freshmart_system_prompt
+```
+
+This registers the FreshMart system prompt in Unity Catalog and sets a `@production` alias. The agent loads the prompt at startup via the `PROMPT_REGISTRY_NAME` environment variable.
+
+> **Tip:** To update the prompt later, create a new version in the Catalog Explorer UI and move the `@production` alias — no code changes needed.
+
+---
+
+## Step 4: Create an MLflow Experiment
 
 The app uses MLflow for tracing and evaluation. Create an experiment in your workspace:
 
@@ -131,7 +160,7 @@ Copy the returned `experiment_id` (a numeric string like `620...`) and paste it 
 
 ---
 
-## Step 4: Validate the Bundle
+## Step 5: Validate the Bundle
 
 Before deploying, validate that your configuration is correct:
 
@@ -147,7 +176,7 @@ If you see errors, fix them before proceeding. Common issues:
 
 ---
 
-## Step 5: Deploy the App
+## Step 6: Deploy the App
 
 Deploy using Databricks Asset Bundles:
 
@@ -171,7 +200,7 @@ databricks apps deploy retail-grocery-ltm-memory \
 
 ---
 
-## Step 6: Grant Lakebase Permissions
+## Step 7: Grant Lakebase Permissions
 
 After deployment, the app gets assigned a **service principal**. This SP needs database permissions to create the memory tables.
 
@@ -196,7 +225,7 @@ uv run python scripts/grant_lakebase_permissions.py "$SP_CLIENT_ID" \
 
 ---
 
-## Step 7: Start the App
+## Step 8: Start the App
 
 After deployment, the app may be in a stopped state. Start it:
 
@@ -212,7 +241,7 @@ databricks apps get retail-grocery-ltm-memory
 
 ---
 
-## Step 8: Verify the Deployment
+## Step 9: Verify the Deployment
 
 ### Get the app URL
 
@@ -251,11 +280,11 @@ Try these test prompts:
 |-------|----------|
 | App stuck in `STOPPED` state | Run `databricks apps start retail-grocery-ltm-memory` |
 | `302` error when calling the API | Use an OAuth token (`databricks auth token`), not a PAT |
-| Permission denied on Lakebase | Re-run Step 7 with the correct SP client ID |
+| Permission denied on Lakebase | Re-run Step 7 (Grant Lakebase Permissions) with the correct SP client ID |
 | `bundle validate` fails | Check that all `value_from` names match the resource `name` fields exactly |
 | Vector Search returns empty results | Verify the index exists and has data in Catalog Explorer |
 | App logs show missing env vars | Check `app.yaml` `valueFrom` names match `databricks.yml` resource names |
-| App won't start after bundle deploy | Run the `databricks apps deploy` command from Step 5 to deploy source code |
+| App won't start after bundle deploy | Run the `databricks apps deploy` command from Step 6 to deploy source code |
 
 ### Viewing App Logs
 
@@ -278,4 +307,5 @@ experiment              ───►   experiment                     ───�
 lakebase_memory         ───►   lakebase_memory (database)     ───► Lakebase hostname
 retail_grocery_genie    ───►   retail_grocery_genie           ───► Genie space ID
 policy_docs_index       ───►   policy_docs_index              ───► securable_full_name (dot format)
+system_prompt           ───►   system_prompt (uc_securable)   ───► securable_full_name (prompt name)
 ```
