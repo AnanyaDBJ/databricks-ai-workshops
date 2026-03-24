@@ -32,29 +32,17 @@ from agent_server import agent  # noqa: F401
 # Defining custom scorers: https://docs.databricks.com/aws/en/mlflow3/genai/eval-monitor/custom-scorers
 test_cases = [
     {
-        "goal": "Find out which organic produce items are currently in stock and compare prices",
-        "persona": "A health-conscious shopper who prefers organic products and is price-sensitive.",
+        "goal": "Learn about the main dishes of Vietnamese cuisine",
+        "persona": "An impatient foodie who doesn't know much about Vietnamese cuisine.",
         "simulation_guidelines": [
-            "Start by asking what organic options are available in the produce section.",
-            "Follow up by comparing prices between organic and conventional options.",
-            "Prefer short messages",
+            "Initially explore the main influences of Vietnamese cuisine before the main dishes.",
         ],
     },
     {
-        "goal": "Understand FreshMart's return and refund policy for perishable items",
-        "persona": "A frustrated customer who bought spoiled milk and wants a refund.",
+        "goal": "Figure out which prime numbers between 1 and 50 are also Fibonacci numbers",
+        "persona": "You are a math novice who has heard of prime numbers but doesn't know what Fibonacci numbers are.",
         "simulation_guidelines": [
-            "Start by describing the issue with the spoiled milk purchase.",
-            "Ask about the specific steps to get a refund.",
-            "Ask about the time window for returns on perishable goods.",
-        ],
-    },
-    {
-        "goal": "Get help planning a weekly grocery list for a family of four on a budget",
-        "persona": "A busy parent trying to meal plan and stay within a $150 weekly grocery budget.",
-        "simulation_guidelines": [
-            "Ask for recommendations on affordable staple items.",
-            "Ask about any current deals or promotions that could help save money.",
+            "Initially ask questions to understand the Fibonacci sequence before exploring which ones are prime.",
             "Prefer short messages",
         ],
     },
