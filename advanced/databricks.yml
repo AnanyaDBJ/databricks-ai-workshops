@@ -22,9 +22,11 @@ resources:
             value: "300"
           - name: MLFLOW_EXPERIMENT_ID
             value_from: "experiment"
-          # TODO: Replace with your Lakebase instance name
-          - name: LAKEBASE_INSTANCE_NAME
-            value_from: "lakebase_memory"
+          # TODO: Replace with your Lakebase autoscaling project and branch
+          - name: LAKEBASE_AUTOSCALING_PROJECT
+            value_from: "lakebase_memory_project"
+          - name: LAKEBASE_AUTOSCALING_BRANCH
+            value_from: "lakebase_memory_branch"
           # TODO: Replace with your Genie Space ID
           - name: GENIE_SPACE_ID
             value_from: "retail_grocery_genie"
@@ -48,11 +50,15 @@ resources:
             name: "Retail Grocery Data"
             space_id: "<your-genie-space-id>"
             permission: "CAN_RUN"
-        # TODO: Replace instance_name with your Lakebase instance name
-        - name: "lakebase_memory"
-          database:
-            instance_name: "<your-lakebase-instance-name>"
-            database_name: "databricks_postgres"
+        # TODO: Replace with your Lakebase autoscaling project and branch names
+        - name: "lakebase_memory_project"
+          lakebase_autoscaling_project:
+            project_name: "<your-lakebase-project-name>"
+            permission: "CAN_CONNECT_AND_CREATE"
+        - name: "lakebase_memory_branch"
+          lakebase_autoscaling_branch:
+            project_name: "<your-lakebase-project-name>"
+            branch_name: "<your-lakebase-branch-name>"
             permission: "CAN_CONNECT_AND_CREATE"
         # TODO: Replace with your Vector Search index full name
         - name: "policy_docs_index"

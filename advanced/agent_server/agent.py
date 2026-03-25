@@ -254,7 +254,6 @@ async def stream_handler(
             project=LAKEBASE_AUTOSCALING_PROJECT,
             branch=LAKEBASE_AUTOSCALING_BRANCH,
         ) as checkpointer:
-            await checkpointer.setup()
             async with AsyncDatabricksStore(
                 instance_name=LAKEBASE_INSTANCE_NAME,
                 project=LAKEBASE_AUTOSCALING_PROJECT,
@@ -262,7 +261,6 @@ async def stream_handler(
                 embedding_endpoint=EMBEDDING_ENDPOINT,
                 embedding_dims=EMBEDDING_DIMS,
             ) as store:
-                await store.setup()
                 config: dict[str, Any] = {"configurable": {"thread_id": thread_id, "store": store}}
                 if user_id:
                     config["configurable"]["user_id"] = user_id
