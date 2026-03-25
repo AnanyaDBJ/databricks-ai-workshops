@@ -28,7 +28,8 @@ Replace these throughout the workshop:
 | `<CATALOG>` | `my_catalog` |
 | `<SCHEMA>` | `retail_agent` |
 | `<WAREHOUSE-ID>` | from `databricks warehouses list` |
-| `<INSTANCE-NAME>` | `my-lakebase-instance` |
+| `<PROJECT-NAME>` | `retail-grocery-agent` (Lakebase autoscaling project) |
+| `<BRANCH-NAME>` | `production` (Lakebase autoscaling branch) |
 | `<GENIE-SPACE-ID>` | `01ef...abcd` (from Genie URL) |
 | `<EXPERIMENT-ID>` | `1159599289265540` |
 
@@ -114,14 +115,29 @@ In the Databricks UI: **Genie > New Genie Space**
 
 ---
 
-## Step 8: Create a Lakebase Instance
+## Step 8: Create a Lakebase Autoscaling Instance
 
 ```bash
-databricks database create-database-instance <INSTANCE-NAME> \
-  --capacity=CU_1 --enable-pg-native-login --no-wait
+# Create the project
+databricks api post /api/2.0/postgres/projects --json '{
+  "name": "<PROJECT-NAME>"
+}'
 
-# Wait until AVAILABLE
-databricks database get-database-instance <INSTANCE-NAME> | jq '.state'
+# Create the branch
+databricks api post /api/2.0/postgres/projects/<PROJECT-NAME>/branches --json '{
+  "name": "<BRANCH-NAME>"
+}'
+
+# Verify the endpoint is ACTIVE
+databricks api get /api/2.0/postgres/projects/<PROJECT-NAME>/branches/<BRANCH-NAME>/endpoints \
+  | jq '.endpoints[0].status.current_state'
+# Wait until "ACTIVE"
+```
+
+Get the PGHOST for later:
+```bash
+databricks api get /api/2.0/postgres/projects/<PROJECT-NAME>/branches/<BRANCH-NAME>/endpoints \
+  | jq -r '.endpoints[0].status.hosts.host'
 ```
 
 ---
@@ -150,19 +166,7 @@ uv run register-prompt --name <CATALOG>.<SCHEMA>.freshmart_system_prompt
 
 ### Lakebase
 
-```bash
-databricks psql <INSTANCE-NAME> -- -c "
-CREATE ROLE \"your.email@company.com\" WITH LOGIN;
-GRANT ALL ON DATABASE databricks_postgres TO \"your.email@company.com\";
-"
-
-databricks psql <INSTANCE-NAME> -- -d databricks_postgres -c "
-GRANT ALL ON SCHEMA public TO \"your.email@company.com\";
-GRANT ALL ON ALL TABLES IN SCHEMA public TO \"your.email@company.com\";
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"your.email@company.com\";
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"your.email@company.com\";
-"
-```
+For autoscaling Lakebase, permissions are managed via Databricks identity — no manual `psql` role creation needed. Your Databricks user is automatically authenticated via OAuth when connecting.
 
 ### Genie Space
 
@@ -198,7 +202,8 @@ Edit `.env`:
 ```bash
 DATABRICKS_CONFIG_PROFILE=DEFAULT
 MLFLOW_EXPERIMENT_ID=<EXPERIMENT-ID>
-LAKEBASE_INSTANCE_NAME=<INSTANCE-NAME>
+LAKEBASE_AUTOSCALING_PROJECT=<PROJECT-NAME>
+LAKEBASE_AUTOSCALING_BRANCH=<BRANCH-NAME>
 GENIE_SPACE_ID=<GENIE-SPACE-ID>
 VECTOR_SEARCH_INDEX=<CATALOG>.<SCHEMA>.policy_docs_index
 PROMPT_REGISTRY_NAME=<CATALOG>.<SCHEMA>.freshmart_system_prompt
@@ -207,9 +212,10 @@ PGUSER=your.email@company.com
 PGDATABASE=databricks_postgres
 ```
 
-To find your Lakebase hostname:
+To find your Lakebase hostname (from Step 8):
 ```bash
-databricks database get-database-instance <INSTANCE-NAME> | jq -r '.read_write_dns'
+databricks api get /api/2.0/postgres/projects/<PROJECT-NAME>/branches/<BRANCH-NAME>/endpoints \
+  | jq -r '.endpoints[0].status.hosts.host'
 ```
 
 ---
@@ -250,7 +256,8 @@ Set your actual resource IDs in the `resources` section:
             permission: "CAN_RUN"
         - name: "lakebase_memory"
           database:
-            instance_name: "<INSTANCE-NAME>"
+            autoscaling_project: "<PROJECT-NAME>"
+            autoscaling_branch: "<BRANCH-NAME>"
             database_name: "databricks_postgres"
             permission: "CAN_CONNECT_AND_CREATE"
         - name: "policy_docs_index"
@@ -293,9 +300,9 @@ SP_CLIENT_ID=$(databricks apps get retail-grocery-ltm-memory --output json | jq 
 
 # Grant Lakebase permissions
 uv run python scripts/grant_lakebase_permissions.py "$SP_CLIENT_ID" \
-  --memory-type langgraph-short-term --instance-name <INSTANCE-NAME>
+  --memory-type langgraph-short-term --project <PROJECT-NAME> --branch <BRANCH-NAME>
 uv run python scripts/grant_lakebase_permissions.py "$SP_CLIENT_ID" \
-  --memory-type langgraph-long-term --instance-name <INSTANCE-NAME>
+  --memory-type langgraph-long-term --project <PROJECT-NAME> --branch <BRANCH-NAME>
 ```
 
 Also grant the SP access to the Genie Space: **Genie > your space > Share** > Add the service principal with **Can Run**.
@@ -330,9 +337,9 @@ Open the app URL in your browser and try the same prompts from Step 13.
 | `relation "store" does not exist` | Memory tables not created — restart the app, it auto-creates on first request |
 | App stuck in `STOPPED` | `databricks apps start retail-grocery-ltm-memory` |
 | `302` error on API call | Use OAuth token (`databricks auth token`), not a PAT |
-| Lakebase permission denied | Re-run Step 16 (deployed) or Step 11 Lakebase section (local) |
+| Lakebase permission denied | Re-run Step 16 (deployed). For local: verify CLI auth is valid (`databricks auth token`) |
 | `bundle validate` fails | Check `value_from` names match resource `name` fields exactly |
 | Vector Search returns empty | Verify the index has data in Catalog Explorer |
-| Local app Lakebase error | Check PGHOST/PGUSER in `.env` and verify your DB role exists (Step 11) |
+| Local app Lakebase error | Check PGHOST/PGUSER in `.env`. If token expired, restart app after `databricks auth login` |
 | Genie permission error | Grant Can Run to your user (Step 11) or app SP (Step 16) |
 | View app logs | **Apps > retail-grocery-ltm-memory > Logs** or `databricks apps get-logs retail-grocery-ltm-memory` |
