@@ -729,3 +729,11 @@ print("    2. Explore the Vector Search index in Catalog Explorer")
 print("    3. Open the Databricks Playground to build your first agent")
 print("    4. See the README for detailed workshop modules")
 print("=" * 70)
+
+# COMMAND ----------
+
+# import mlflow 
+# mlflow.create_experiment(
+#     name="/Users/<your email>/<experiment name>",
+#     artifact_location="dbfs:/Volumes/<catalog>/<schema>/<volume>/mlflow-artifacts"
+# )
