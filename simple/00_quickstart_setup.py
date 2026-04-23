@@ -1,5 +1,4 @@
 # Databricks notebook source
-
 # MAGIC %md
 # MAGIC # FreshMart Workshop Setup
 # MAGIC
@@ -25,6 +24,11 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install databricks-vectorsearch
+# MAGIC %restart_python
+
+# COMMAND ----------
+
 dbutils.widgets.text("catalog", "", "1. Catalog Name")
 dbutils.widgets.text("schema", "retail_grocery", "2. Schema Name")
 
@@ -44,7 +48,7 @@ print(f"Using schema: {FULL_SCHEMA}")
 
 # COMMAND ----------
 
-spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
+# spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {FULL_SCHEMA}")
 print(f"Catalog '{CATALOG}' and schema '{FULL_SCHEMA}' are ready.")
 
@@ -575,44 +579,27 @@ else:
 
 print(f"Endpoint '{VS_ENDPOINT_NAME}' is ready.")
 
-# --- Create index (or reuse existing) ---
-try:
-    index = w.vector_search_indexes.get_index(VS_INDEX_NAME)
-    print(f"Vector Search index '{VS_INDEX_NAME}' already exists.")
-except Exception:
-    print(f"Creating Vector Search index '{VS_INDEX_NAME}'...")
-    w.vector_search_indexes.create_index(
-        name=VS_INDEX_NAME,
-        endpoint_name=VS_ENDPOINT_NAME,
-        primary_key="chunk_id",
-        index_type=VectorIndexType.DELTA_SYNC,
-        delta_sync_index_spec=DeltaSyncVectorIndexSpecRequest(
-            source_table=f"{FULL_SCHEMA}.policy_docs_chunked",
-            pipeline_type=PipelineType.TRIGGERED,
-            embedding_source_columns=[
-                EmbeddingSourceColumn(
-                    name="content",
-                    embedding_model_endpoint_name="databricks-gte-large-en",
-                )
-            ],
-        ),
-    )
-    print(f"Vector Search index '{VS_INDEX_NAME}' created. Initial sync in progress...")
+# COMMAND ----------
 
-# Wait for index to be ready
-for attempt in range(60):
-    try:
-        index = w.vector_search_indexes.get_index(VS_INDEX_NAME)
-        status = index.status.ready
-        if status:
-            break
-    except Exception:
-        pass
-    if attempt % 6 == 0:
-        print(f"  Waiting for index to sync and become ready...")
-    time.sleep(10)
+# MAGIC %sql 
+# MAGIC ALTER TABLE qsic_workshop_prep_catalog.level_100_testing.policy_docs_chunked
+# MAGIC   SET TBLPROPERTIES (delta.enableChangeDataFeed = true)
 
-print(f"Vector Search index '{VS_INDEX_NAME}' is ready.")
+# COMMAND ----------
+
+from databricks.vector_search.client import VectorSearchClient
+
+client = VectorSearchClient()
+
+index = client.create_delta_sync_index(
+  endpoint_name=VS_ENDPOINT_NAME,
+  source_table_name="qsic_workshop_prep_catalog.level_100_testing.policy_docs_chunked",
+  index_name=VS_INDEX_NAME,
+  pipeline_type="TRIGGERED",
+  primary_key="chunk_id",
+  embedding_source_column="content",
+  embedding_model_endpoint_name="databricks-gte-large-en",
+)
 
 # COMMAND ----------
 
@@ -625,7 +612,10 @@ print(f"Vector Search index '{VS_INDEX_NAME}' is ready.")
 
 # COMMAND ----------
 
+import json
+
 GENIE_SPACE_TITLE = f"FreshMart Retail Data ({SCHEMA})"
+
 
 # Get the first available SQL warehouse
 warehouses = w.warehouses.list()
@@ -653,6 +643,12 @@ else:
 
     if not genie_space_id:
         print(f"Creating Genie Space '{GENIE_SPACE_TITLE}'...")
+        serialized = json.dumps({
+            "version": 1,
+            "data_sources": {
+                "tables": [{"identifier": t} for t in sorted(table_identifiers)]
+            }
+        })
         response = w.api_client.do("POST", "/api/2.0/genie/spaces", body={
             "title": GENIE_SPACE_TITLE,
             "description": (
@@ -661,7 +657,7 @@ else:
                 "transaction history, and payment records."
             ),
             "warehouse_id": warehouse_id,
-            "table_identifiers": table_identifiers,
+            "serialized_space": serialized,
         })
         genie_space_id = response.get("space_id")
         print(f"Genie Space created (ID: {genie_space_id})")
