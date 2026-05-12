@@ -97,7 +97,7 @@ Best for: developers who want to edit code locally, test on their machine, then 
 
 **Requirements:** Databricks CLI, Python + `uv`, Node.js 20+
 
-> **[Start here: SETUP_GUIDE.md](./SETUP_GUIDE.md)**
+> **[Start here: SETUP_GUIDE.md](./lab_instructions/SETUP_GUIDE.md)**
 
 ### Option B: Entirely Within Databricks Workspace
 
@@ -105,7 +105,7 @@ Best for: workshops where participants only need a browser — no local installa
 
 **Requirements:** A Databricks workspace with Apps, Lakebase, and Web Terminal enabled
 
-> **[Start here: SETUP_GUIDE_WORKSPACE_ONLY.md](./SETUP_GUIDE_WORKSPACE_ONLY.md)**
+> **[Start here: SETUP_GUIDE_WORKSPACE_ONLY.md](./lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md)**
 
 Both guides include the data preparation step (creating tables, Vector Search index, and Genie Space from the shared `data/` folder).
 
@@ -126,8 +126,11 @@ medium/
 │   ├── discover_tools.py     # Discover available workspace resources
 │   └── lakebase_setup_script.ipynb  # Helper for Lakebase configuration
 ├── databricks.yml            # Deployment configuration (Asset Bundle)
-├── SETUP_GUIDE.md            # Local CLI setup instructions
-└── SETUP_GUIDE_WORKSPACE_ONLY.md   # Workspace-only setup instructions
+├── lab_instructions/
+│   ├── SETUP_GUIDE.md            # Local CLI setup instructions
+│   ├── SETUP_GUIDE_WORKSPACE_ONLY.md   # Workspace-only setup instructions
+│   ├── L200_Lab_Guide_Local_CLI.html   # Visual lab guide (Local CLI)
+│   └── L200_Lab_Guide_Workspace.html   # Visual lab guide (Workspace-only)
 ```
 
 ---
