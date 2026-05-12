@@ -1,6 +1,6 @@
-# Setup Guide: Deploy This Agent in Your Own Workspace
+# Setup Guide: Deploy This Agent with CLI + Local Development
 
-This guide walks you through cloning this codebase and deploying it as a Databricks App in your own workspace, with Lakebase-powered short-term memory and chat history sidebar.
+This guide walks you through setting up the workshop data, cloning this codebase, testing locally, and deploying as a Databricks App with Lakebase-powered short-term memory and chat history.
 
 ---
 
@@ -18,12 +18,44 @@ This guide walks you through cloning this codebase and deploying it as a Databri
 
 ```bash
 git clone <repo-url>
-cd agent-openai-agents-sdk
+cd <repo-name>
 ```
 
 ---
 
-## Step 2: Authenticate with Databricks CLI
+## Step 2: Prepare Workshop Data
+
+Before setting up the agent app, you need to create the data resources (tables, Vector Search index, Genie Space) that the agent will use as tools.
+
+**Option A — Run the setup notebook in Databricks (recommended):**
+
+1. Import the repo into your workspace (Repos → Add → Git Folder)
+2. Open `data/workspace_setup_script/01_quickstart_setup.py`
+3. Fill in catalog and schema widgets → **Run All**
+4. Note the outputs:
+   - **MLflow Experiment ID**
+   - **Vector Search Index name** (e.g., `catalog.schema.policy_docs_index`)
+   - **Genie Space ID**
+
+**Option B — Run local scripts (if you prefer CLI):**
+
+The `data/local_cli_setup_script/` folder has Python scripts that create the same resources via REST API:
+
+```bash
+cd data/local_cli_setup_script
+
+# Generate structured data tables
+python execute_sql.py --profile DEFAULT --warehouse-id <WAREHOUSE_ID>
+
+# Chunk policy documents
+python execute_chunking.py --profile DEFAULT --warehouse-id <WAREHOUSE_ID>
+```
+
+> **Note:** With Option B, you still need to manually create the Vector Search endpoint+index, Genie Space, and MLflow experiment. See the `data/README.md` for details.
+
+---
+
+## Step 3: Authenticate with Databricks CLI
 
 ```bash
 databricks auth login --host https://<your-workspace>.cloud.databricks.com
@@ -37,19 +69,23 @@ databricks auth profiles
 
 ---
 
-## Step 3: Run Quickstart
+## Step 4: Run Quickstart
 
 ```bash
+cd medium
 uv run quickstart --profile DEFAULT
 ```
 
 This will:
-- Create a `.env` file with your profile and an MLflow experiment
+- Create a `.env` file with your profile
+- Create (or reuse) an MLflow experiment
 - Update `databricks.yml` with the experiment ID
+
+> If you already created an experiment in Step 2, pass it: `uv run quickstart --profile DEFAULT --experiment-id <ID>`
 
 ---
 
-## Step 4: Create a Lakebase Instance
+## Step 5: Create a Lakebase Instance
 
 In the Databricks UI or via CLI, create an **autoscaling** Lakebase project and branch. Note down:
 
@@ -58,9 +94,11 @@ In the Databricks UI or via CLI, create an **autoscaling** Lakebase project and 
 - The **database path**: `projects/<project-name>/branches/<branch-name>/databases/<db-name>`
 - The **PGHOST** hostname (e.g., `ep-xxxx-yyyy.database.<region>.cloud.databricks.com`)
 
+> **Tip:** Run Cell 1 of `medium/scripts/lakebase_setup_script.ipynb` to list branches and endpoints. Run Cell 3 to find the database ID.
+
 ---
 
-## Step 5: Update `.env` for Local Development
+## Step 6: Update `.env` for Local Development
 
 Edit `.env` to add Lakebase configuration:
 
@@ -85,7 +123,7 @@ PGUSER=<your-email@company.com>
 
 ---
 
-## Step 6: Update `databricks.yml` with Your Resources
+## Step 7: Update `databricks.yml` with Your Resources
 
 Edit the `resources` section to point to your Lakebase instance and experiment:
 
@@ -153,22 +191,22 @@ targets:
 
 ---
 
-## Step 7: Customize the Agent (Optional)
+## Step 8: Customize the Agent
 
-Edit `agent_server/agent.py` to change the model, system prompt, or MCP servers:
+Edit `agent_server/agent.py` to configure the model, system prompt, and tools:
 
 ```python
 NAME = 'my-agent'
 SYSTEM_PROMPT = 'You are a helpful assistant specialized in...'
 MODEL = 'databricks-claude-sonnet-4-6'  # or your preferred model
 MCP_SERVERS = [
-    # Add your own Vector Search indexes, Genie spaces, etc.
-    # ('Display Name', '/api/2.0/mcp/vector-search/catalog/schema/index'),
-    # ('Genie Space Name', '/api/2.0/mcp/genie/<space-id>'),
+    # Use the Vector Search index and Genie Space from Step 2
+    ('Policy Document Search', '/api/2.0/mcp/vector-search/<catalog>/<schema>/<index-name>'),
+    ('Data Query Assistant', '/api/2.0/mcp/genie/<genie-space-id>'),
 ]
 ```
 
-To discover available tools in your workspace:
+To discover additional tools available in your workspace:
 
 ```bash
 uv run discover-tools
@@ -176,60 +214,32 @@ uv run discover-tools
 
 ---
 
-## Step 8: Create Lakebase Tables (First-Time Setup)
-
-Start the backend server locally. It will automatically create the `agent_openai_memory` schema and tables:
-
-```bash
-uv run start-server
-```
-
-If that fails with a permission error, create tables manually:
-
-```python
-import asyncio
-from databricks_openai.agents.session import AsyncDatabricksSession
-
-async def setup():
-    session = AsyncDatabricksSession(
-        session_id="__setup__",
-        autoscaling_endpoint="projects/<your-project>/branches/<your-branch>/endpoints/<your-endpoint>",
-        schema="agent_openai_memory",
-    )
-    await session._ensure_tables()
-    print("Tables created!")
-
-asyncio.run(setup())
-```
-
-Save this as `setup_tables.py` and run: `uv run python setup_tables.py`
-
----
-
-## Step 9: Run the Frontend Drizzle Migration (For Chat History Sidebar)
-
-```bash
-cd e2e-chatbot-app-next
-npm install
-npx drizzle-kit push
-cd ..
-```
-
-This creates the `ai_chatbot` schema tables (conversations, messages, etc.) used by the frontend sidebar.
-
----
-
-## Step 10: Test Locally
+## Step 9: Test Locally
 
 ```bash
 uv run start-app
 ```
 
-Open `http://localhost:8000`. Send messages and verify the agent remembers context across turns within the same conversation.
+This starts both the backend (port 8000) and frontend (port 3000). On first run, it automatically:
+- Creates `agent_openai_memory` schema + tables (backend agent memory)
+- Runs Drizzle migrations to create `ai_chatbot` schema + tables (frontend chat history)
+
+Open `http://localhost:3000` (or the port shown in the output). Send messages and verify:
+- The agent responds using your MCP tools
+- Chat history persists in the sidebar after page refresh
+- The agent remembers context within a conversation
+
+> **Note:** If you see migration errors about tables already existing, it means tables were previously created by another method. Drop them:
+> ```bash
+> # Connect to Lakebase via psql or a notebook and run:
+> DROP SCHEMA IF EXISTS ai_chatbot CASCADE;
+> DROP SCHEMA IF EXISTS drizzle CASCADE;
+> ```
+> Then restart `uv run start-app`.
 
 ---
 
-## Step 11: Deploy to Databricks Apps
+## Step 10: Deploy to Databricks Apps
 
 ```bash
 # Validate configuration
@@ -242,13 +252,17 @@ databricks bundle deploy --profile DEFAULT
 databricks bundle run agent_openai_agents_sdk --profile DEFAULT
 ```
 
-> **Note:** `bundle deploy` only uploads files. `bundle run` is required to actually start/restart the app.
+> **Note:** `bundle deploy` only uploads files and creates resources. `bundle run` is required to actually start/restart the app.
 
 ---
 
-## Step 12: Grant Permissions to the App's Service Principal
+## Step 11: Grant Permissions to the App's Service Principal
 
-After first deploy, the app's service principal needs access to the Lakebase tables.
+After the first deploy, the app's service principal needs access to the Lakebase schemas that were created during local testing (Step 9). Since YOU created those tables locally, your user owns them — the app's SP needs explicit grants.
+
+> **Why this is needed:** When you tested locally (Step 9), the tables were created under your user identity. The deployed app runs as a service principal, which doesn't own those tables and can't access them without grants.
+>
+> **Alternative:** If you prefer no grants, you can drop all schemas before deploying and let the app's SP create them fresh (it owns what it creates). See the note in Step 9.
 
 Get the SP identity:
 
@@ -272,13 +286,20 @@ GRANT ALL ON ALL TABLES IN SCHEMA ai_chatbot TO PUBLIC;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA ai_chatbot TO PUBLIC;
 ALTER DEFAULT PRIVILEGES IN SCHEMA ai_chatbot GRANT ALL ON TABLES TO PUBLIC;
 ALTER DEFAULT PRIVILEGES IN SCHEMA ai_chatbot GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO PUBLIC;
+
+-- Drizzle migration journal (so the SP can read which migrations are applied)
+GRANT USAGE ON SCHEMA drizzle TO PUBLIC;
+GRANT ALL ON ALL TABLES IN SCHEMA drizzle TO PUBLIC;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA drizzle TO PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA drizzle GRANT ALL ON TABLES TO PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA drizzle GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO PUBLIC;
 ```
 
 > **Important:** You must grant on SEQUENCES separately. Table grants alone are not enough. Without this, the service principal will get "permission denied for sequence" errors.
 
 ---
 
-## Step 13: Verify the Deployed App
+## Step 12: Verify the Deployed App
 
 ```bash
 # Check app status
@@ -304,14 +325,16 @@ curl -X POST ${APP_URL}/invocations \
 | Placeholder | Where to find it |
 |---|---|
 | `<your-workspace>` | Your Databricks workspace URL |
-| `<your-experiment-id>` | Created by `uv run quickstart` (saved in `.env`) |
+| `<your-experiment-id>` | Created by quickstart or the data setup notebook (Step 2) |
 | `<your-project>` | Lakebase project name (from Lakebase UI) |
 | `<your-branch>` | Lakebase branch name (usually `production`) |
 | `<your-endpoint>` | Lakebase endpoint name (usually `primary`) |
-| `<your-db>` | Lakebase database name (from Lakebase UI) |
+| `<your-db>` | Lakebase database ID (use Cell 3 of lakebase_setup_script.ipynb) |
 | `<your-lakebase-hostname>` | PGHOST value (from Lakebase connection info) |
 | `<your-email>` | Your Databricks login email (for PGUSER locally) |
 | `<your-app-name>` | Name you choose for the Databricks App |
+| `<catalog>/<schema>/<index-name>` | Vector Search index from Step 2 |
+| `<genie-space-id>` | Genie Space ID from Step 2 |
 
 ---
 
@@ -319,13 +342,16 @@ curl -X POST ${APP_URL}/invocations \
 
 | Problem | Fix |
 |---|---|
-| `relation agent_messages does not exist` | Run Step 8 to create tables |
-| `permission denied for schema public` | Tables must be created in `agent_openai_memory` schema, not `public`. The code already uses `create_tables=False` to prevent this. Run Step 8 manually. |
-| `permission denied for sequence` | Run the GRANT on sequences in Step 12 |
+| `relation "ai_chatbot"."Chat" already exists` | Tables were created by another method. Drop schemas: `DROP SCHEMA IF EXISTS ai_chatbot CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE;` then restart |
+| `relation agent_messages does not exist` | Agent memory tables not created. Restart the app — `start_server.py` auto-creates them. Or run Cell 2 of `lakebase_setup_script.ipynb` |
+| `permission denied for schema` | SP can't access user-owned tables. Run the GRANT statements in Step 11 |
+| `permission denied for sequence` | Run the GRANT on sequences in Step 11 (sequences need separate grants) |
 | App crashes after deploy | Check `databricks apps logs` — usually a missing env var or permission issue |
-| Frontend shows no chat history after page refresh | Chat history sidebar requires the Lakebase PG vars to be available. Verify `PGDATABASE` and `PGPORT` are set in `app.yaml` and the postgres resource is bound. |
-| `databricks bundle deploy` says "unknown field" | Your Databricks CLI version is too old — upgrade to v0.295.0+ |
-| `An app with the same name already exists` | Either delete the existing app (`databricks apps delete <name>`) or bind it: `databricks bundle deployment bind agent_openai_agents_sdk <name> --auto-approve` |
+| Frontend shows no chat history | Verify `PGDATABASE` and `PGPORT` are set in `databricks.yml` and the postgres resource is bound. Check migration ran successfully in logs. |
+| `databricks bundle deploy` says "unknown field" | Databricks CLI too old — upgrade to v0.295.0+ |
+| `An app with the same name already exists` | Delete: `databricks apps delete <name>` or bind: `databricks bundle deployment bind agent_openai_agents_sdk <name> --auto-approve` |
+| MCP tools not responding | Verify URLs in `agent.py` MCP_SERVERS match the resources created in Step 2. Format: `/api/2.0/mcp/vector-search/catalog/schema/index` |
+| Vector Search returns no results | Index may not be synced. Wait 5-10 min after creation, or trigger sync manually in Catalog Explorer. |
 
 ---
 
@@ -337,9 +363,8 @@ curl -X POST ${APP_URL}/invocations \
 │                                                         │
 │  ┌──────────────────┐      ┌──────────────────────┐    │
 │  │  Frontend (3000) │─────▶│   Backend (8000)     │    │
-│  │  Next.js/React   │      │   FastAPI + MLflow   │    │
-│  │  Chat UI +       │      │   OpenAI Agents SDK  │    │
-│  │  History Sidebar │      │                      │    │
+│  │  React Chat UI + │      │   FastAPI + MLflow   │    │
+│  │  History Sidebar │      │   OpenAI Agents SDK  │    │
 │  └────────┬─────────┘      └──────────┬───────────┘    │
 │           │                            │                │
 └───────────┼────────────────────────────┼────────────────┘
