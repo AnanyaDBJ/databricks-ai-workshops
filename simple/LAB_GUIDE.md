@@ -2,8 +2,6 @@
 
 A complete, step-by-step guide to building, deploying, evaluating, and improving an AI agent using managed Databricks services. Follow this guide at your own pace or as part of an instructor-led workshop.
 
-> **Instructors:** A separate dark-themed conductor guide with demo scripts, timing, and talking points is available at [`L100_Instructor_Guide.html`](./L100_Instructor_Guide.html).
-
 ---
 
 ## Overview
