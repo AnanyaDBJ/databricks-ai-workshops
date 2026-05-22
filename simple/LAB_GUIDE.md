@@ -79,7 +79,7 @@ You should now see the full folder structure including `simple/`, `medium/`, `ad
 
 ### 1.2 Run the Data Setup Notebook
 
-1. Navigate to `data/workspace_setup_script/01_quickstart_setup.py`
+1. Navigate to `data/01_quickstart_setup.py`
 2. Attach the notebook to **Serverless** compute (or any existing cluster)
 3. Fill in the widgets at the top:
    - **Catalog Name:** Your Unity Catalog (e.g., `ai_workshop_catalog`)
@@ -88,7 +88,7 @@ You should now see the full folder structure including `simple/`, `medium/`, `ad
 
 > **Note:** The notebook takes 10-15 minutes to complete. Most of the time is spent provisioning the Vector Search endpoint.
 
-> **Private Link / Firewall / Egress Restrictions:** If your workspace has network restrictions (Private Link, firewall rules, or blocked external egress), run the `data/workspace_setup_script/00-utils.ipynb` notebook **before** running the setup notebook. This utility notebook creates an MLflow experiment with artifact storage configured as a Databricks Volume (avoiding external storage dependencies) and handles downloads through internal paths. Refer to the [workshop conductor document](https://docs.google.com/document/d/1BwcOXfQ0XBRHrPnzThwRcd4289cMheshSE6EKbTcnTw/edit) for detailed instructions on restricted-network setups.
+> **Private Link / Firewall / Egress Restrictions:** If your workspace has network restrictions (Private Link, firewall rules, or blocked external egress), run the `data/00-utils.ipynb` notebook **before** running the setup notebook. This utility notebook creates an MLflow experiment with artifact storage configured as a Databricks Volume (avoiding external storage dependencies) and handles downloads through internal paths. Refer to the [workshop conductor document](https://docs.google.com/document/d/1BwcOXfQ0XBRHrPnzThwRcd4289cMheshSE6EKbTcnTw/edit) for detailed instructions on restricted-network setups.
 
 ### 1.3 What Gets Created
 

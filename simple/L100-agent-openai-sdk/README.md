@@ -6,7 +6,7 @@ A production-ready AI agent for FreshMart grocery chain built with the OpenAI Ag
 
 Before starting, ensure you have:
 
-1. **Databricks workspace** with resources created by `01_quickstart_setup.py` (Genie Space, Vector Search index, MLflow experiment)
+1. **Databricks workspace** with resources created by `data/01_quickstart_setup.py` (Genie Space, Vector Search index, MLflow experiment)
 2. **uv** — Python package manager ([install](https://docs.astral.sh/uv/getting-started/installation/))
 3. **Node.js 20+** — for the chat UI ([install via nvm](https://github.com/nvm-sh/nvm))
 4. **Databricks CLI** — authenticated to your workspace ([install](https://docs.databricks.com/dev-tools/cli/install.html))
@@ -119,6 +119,6 @@ If you have Claude Code installed, these skills guide you through common tasks:
 | `uv run quickstart` fails on auth | Run `databricks auth login` manually, then retry |
 | Port 8000 already in use | `lsof -ti :8000 \| xargs kill -9` |
 | Port 3000 already in use | `lsof -ti :3000 \| xargs kill -9` |
-| MCP server connection error | Check that Genie Space and Vector Search index exist (run `01_quickstart_setup.py` first) |
+| MCP server connection error | Check that Genie Space and Vector Search index exist (run `data/01_quickstart_setup.py` first) |
 | "App already exists" on deploy | Run `uv run quickstart --app-name <existing-app>` to bind, then deploy |
 | Permission errors after deploy | Ensure resources are listed in `databricks.yml` with correct permissions |

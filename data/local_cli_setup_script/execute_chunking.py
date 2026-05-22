@@ -19,7 +19,7 @@ CATALOG = "ananyaroy"
 SCHEMA = "retail_wiab"
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
 TARGET_TABLE = f"{FULL_SCHEMA}.policy_docs_chunked"
-DOCS_DIR = os.path.join(os.path.dirname(__file__), "policy_docs")
+DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "verticals", "retail", "docs")
 
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200

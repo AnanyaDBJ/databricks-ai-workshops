@@ -37,7 +37,7 @@ Once imported, your code will be at a path like:
 
 This notebook creates the sample data and AI tools that your agent will use. Think of it as populating a database with demo data and setting up the search/query services.
 
-1. In the workspace file browser, navigate to `data/workspace_setup_script/01_quickstart_setup.py`
+1. In the workspace file browser, navigate to `data/01_quickstart_setup.py`
 2. Click it to open as a notebook
 3. At the top, you'll see two dropdown **widgets** — select your **catalog** and **schema** (these are like a database and folder for organizing your tables)
 4. Click **Run All** at the top (takes ~10-15 minutes — most of the wait is Vector Search provisioning)

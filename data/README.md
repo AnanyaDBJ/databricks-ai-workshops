@@ -1,137 +1,49 @@
-# Synthetic Data Generation for Workshop
+# Workshop synthetic data
 
-This folder contains scripts and source documents to generate all the data required for the QSIC workshop. It produces two types of data in Unity Catalog:
+Pick an **industry** in [`01_quickstart_setup.py`](01_quickstart_setup.py) (widget: `retail`, `education`, or `financial_services`). The notebook generates tables and chunks markdown from each vertical’s `docs/` folder.
 
-1. **Structured retail data** — synthetic customers, products, stores, transactions, and payments
-2. **Chunked policy documents** — markdown policy docs split into overlapping text chunks for vector search
-
-## Folder Structure
+## Layout
 
 ```
 data/
-├── README.md
-├── create_structured_data.py     # PySpark script — generates structured tables (run on cluster or locally)
-├── create_chunked_docs.py        # PySpark script — chunks policy docs (requires UC Volumes access)
-├── execute_sql.py                # Local script — generates structured tables via SQL REST API
-├── execute_chunking.py           # Local script — chunks policy docs via SQL REST API
-├── run_sql_generation.py         # Local script — generates structured tables via Databricks CLI
-└── policy_docs/                  # Source markdown policy documents (7 files)
-    ├── customer_service_guidelines.md
-    ├── delivery_pickup_procedures.md
-    ├── membership_loyalty_program.md
-    ├── privacy_policy.md
-    ├── product_safety_recalls.md
-    ├── return_refund_policy.md
-    └── store_operating_procedures.md
+├── 00-utils.ipynb              # optional: MLflow artifacts on UC Volume (restricted networks)
+├── 01_quickstart_setup.py      # main workshop setup notebook
+├── lib/
+│   ├── generate.py
+│   ├── chunking.py             # writes policy_docs_chunked (UC table name unchanged)
+│   └── demo_names.py
+├── verticals/
+│   ├── retail/
+│   │   ├── tables.py
+│   │   └── docs/               # source markdown for Vector Search
+│   ├── education/
+│   │   ├── tables.py
+│   │   └── docs/
+│   └── financial_services/
+│       ├── tables.py
+│       └── docs/
+└── scripts/
+    └── generate_structured_data.py
 ```
 
-## Scripts Overview
+## Industries
 
-There are **two tasks**, each with multiple execution variants:
+| Industry | Brand | Tables | Docs |
+|----------|-------|--------|------|
+| `education` (default) | EduPath Academy | 6 retail-shaped table names, school semantics | `verticals/education/docs/` |
+| `retail` | FreshMart | Same 6 tables, grocery semantics | `verticals/retail/docs/` |
+| `financial_services` | Meridian Capital Partners | `clients`, `instruments`, `branches`, `accounts`, `trades`, `trade_legs`, `settlements` | `verticals/financial_services/docs/` |
 
-### Task 1: Generate Structured Retail Data
-
-Creates 6 tables: `customers` (200 rows), `products` (~500), `stores` (10), `transactions` (2000), `transaction_items` (~8000+), `payment_history` (400).
-
-| Script | Runs On | Method |
-|--------|---------|--------|
-| `create_structured_data.py` | Databricks cluster or local with PySpark | PySpark DataFrames |
-| `execute_sql.py` | Local machine | SQL via REST API (`urllib`) |
-| `run_sql_generation.py` | Local machine | SQL via `databricks api` CLI |
-
-### Task 2: Chunk Policy Documents for Vector Search
-
-Reads the 7 markdown files from `policy_docs/`, splits them into overlapping chunks (1000 chars, 200 overlap), and writes to a `policy_docs_chunked` table.
-
-| Script | Runs On | Method |
-|--------|---------|--------|
-| `create_chunked_docs.py` | Databricks cluster or local with PySpark | PySpark + UC Volumes |
-| `execute_chunking.py` | Local machine | SQL via REST API (`urllib`) |
-
-## TODO: What to Change for a New Workspace
-
-### Required Changes (all 5 scripts)
-
-Update these two constants at the top of **every** script:
-
-| Constant | Current Value | Update To |
-|----------|---------------|-----------|
-| `CATALOG` | `"qsic_workshop_prep_catalog"` | Your Unity Catalog name |
-| `SCHEMA` | `"retail_agent"` | Your target schema name |
-
-Files to update:
-- [ ] `create_structured_data.py` — lines with `CATALOG` and `SCHEMA`
-- [ ] `create_chunked_docs.py` — lines with `CATALOG` and `SCHEMA`
-- [ ] `execute_sql.py` — lines with `CATALOG` and `SCHEMA`
-- [ ] `execute_chunking.py` — lines with `CATALOG` and `SCHEMA`
-- [ ] `run_sql_generation.py` — lines with `CATALOG` and `SCHEMA`
-
-### Prerequisites for the New Workspace
-
-- [ ] Create the target catalog and schema in Unity Catalog
-- [ ] For PySpark scripts: run on a Databricks cluster (e.g. via `databricks jobs submit`) or locally with PySpark + UC connectivity
-- [ ] For `create_chunked_docs.py`: create a UC Volume and upload `policy_docs/*.md` files:
-  ```bash
-  databricks fs cp ./policy_docs/ dbfs:/Volumes/<CATALOG>/<SCHEMA>/policy_docs/ --recursive --profile <profile>
-  ```
-- [ ] For local scripts: ensure the `databricks` CLI is installed and configured with a profile
-- [ ] For local scripts: have a SQL warehouse running and note its warehouse ID
-
-### Runtime Arguments (local scripts only)
-
-The local scripts accept CLI arguments — no hardcoded workspace URLs:
+## Local CLI (optional)
 
 ```bash
-# Structured data generation
-python execute_sql.py --profile <PROFILE> --warehouse-id <WAREHOUSE_ID>
-python run_sql_generation.py --profile <PROFILE> --warehouse-id <WAREHOUSE_ID>
-
-# Document chunking
-python execute_chunking.py --profile <PROFILE> --warehouse-id <WAREHOUSE_ID>
+cd data
+python scripts/generate_structured_data.py --industry retail --catalog CATALOG --schema SCHEMA
+python local_cli_setup_script/execute_chunking.py --profile PROFILE --warehouse-id ID
 ```
 
-### Post-Data-Generation: Genie Space Setup
+`execute_chunking.py` chunks **retail** docs only.
 
-Once the structured retail tables are created, set up a Genie space so business users can query the data using natural language.
+## Note on financial_services
 
-- [ ] **Create a Genie space** via the REST API (`POST /api/2.0/genie/spaces`) or the Databricks UI
-  - Title: e.g. `"QSIC Retail Agent"`
-  - Description: describe the retail dataset for Genie's context
-  - Table identifiers: add all 6 structured tables (`customers`, `products`, `stores`, `transactions`, `transaction_items`, `payment_history`)
-  - Warehouse ID: a Pro or Serverless SQL warehouse
-- [ ] **Write a setup script** (`create_genie_space.py`) that automates the above via the REST API
-- [ ] Verify Genie can answer natural language queries against the retail tables
-
-### Post-Chunking: Vector Search Setup
-
-Once the `policy_docs_chunked` table is populated, create a Vector Search endpoint and index for semantic retrieval.
-
-- [ ] **Create a Vector Search endpoint** using the Python SDK:
-  ```python
-  from databricks.vector_search.client import VectorSearchClient
-  client = VectorSearchClient()
-  client.create_endpoint(name="<ENDPOINT_NAME>", endpoint_type="STANDARD")
-  ```
-- [ ] **Wait for the endpoint** to reach `READY` state (can take several minutes)
-- [ ] **Create a Delta Sync index** on the chunked policy table:
-  ```python
-  client.create_delta_sync_index(
-      endpoint_name="<ENDPOINT_NAME>",
-      source_table_name="<CATALOG>.<SCHEMA>.policy_docs_chunked",
-      index_name="<CATALOG>.<SCHEMA>.policy_docs_vs_index",
-      pipeline_type="TRIGGERED",
-      primary_key="chunk_id",
-      embedding_source_column="content",
-      embedding_model_endpoint_name="databricks-gte-large-en",
-  )
-  ```
-- [ ] **Write a setup script** (`create_vector_search.py`) that automates endpoint + index creation
-- [ ] **Sync the index** and verify similarity search returns relevant policy chunks
-
-### Other Considerations
-
-- [ ] Verify the Databricks CLI profile points to the correct workspace host
-- [ ] Ensure the service principal or user has `CREATE TABLE` and `WRITE` permissions on the target schema
-- [ ] If changing the chunking parameters (size/overlap), update both `create_chunked_docs.py` and `execute_chunking.py` to keep them in sync
-- [ ] All scripts use `random.seed(42)` for reproducibility — data will be identical across runs
-- [ ] Ensure the workspace has a Foundation Model API endpoint (e.g. `databricks-gte-large-en`) available for embedding generation
+Agents and lab guides written for education/retail still expect the 6-table names. Use `financial_services` when you want financial-native tables and update Genie/agent prompts accordingly.

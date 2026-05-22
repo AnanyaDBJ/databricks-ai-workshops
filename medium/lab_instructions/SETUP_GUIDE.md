@@ -30,7 +30,7 @@ Before setting up the agent app, you need to create the data resources (tables, 
 **Option A — Run the setup notebook in Databricks (recommended):**
 
 1. Import the repo into your workspace (Repos → Add → Git Folder)
-2. Open `data/workspace_setup_script/01_quickstart_setup.py`
+2. Open `data/01_quickstart_setup.py`
 3. Fill in catalog and schema widgets → **Run All**
 4. Note the outputs:
    - **MLflow Experiment ID**
