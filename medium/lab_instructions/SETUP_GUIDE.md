@@ -94,7 +94,7 @@ In the Databricks UI or via CLI, create an **autoscaling** Lakebase project and 
 - The **database path**: `projects/<project-name>/branches/<branch-name>/databases/<db-name>`
 - The **PGHOST** hostname (e.g., `ep-xxxx-yyyy.database.<region>.cloud.databricks.com`)
 
-> **Tip:** Run Cell 1 of `medium/scripts/lakebase_setup_script.ipynb` to list branches and endpoints. Run Cell 3 to find the database ID.
+> **Tip:** In `medium/scripts/lakebase_setup_script.ipynb`, **run Cell 1 first** (installs `databricks-openai[memory]` + restarts Python). Then run **Cell 2** to list branches/endpoints, and **Cell 4** to find the database ID. Every cell has a banner comment at the top stating whether to run it; do not run Cells 3, 5, or 6 in the default flow.
 
 ---
 
@@ -329,7 +329,7 @@ curl -X POST ${APP_URL}/invocations \
 | `<your-project>` | Lakebase project name (from Lakebase UI) |
 | `<your-branch>` | Lakebase branch name (usually `production`) |
 | `<your-endpoint>` | Lakebase endpoint name (usually `primary`) |
-| `<your-db>` | Lakebase database ID (use Cell 3 of lakebase_setup_script.ipynb) |
+| `<your-db>` | Lakebase database ID (use Cell 4 of lakebase_setup_script.ipynb, after running Cell 1 install) |
 | `<your-lakebase-hostname>` | PGHOST value (from Lakebase connection info) |
 | `<your-email>` | Your Databricks login email (for PGUSER locally) |
 | `<your-app-name>` | Name you choose for the Databricks App |
@@ -343,7 +343,7 @@ curl -X POST ${APP_URL}/invocations \
 | Problem | Fix |
 |---|---|
 | `relation "ai_chatbot"."Chat" already exists` | Tables were created by another method. Drop schemas: `DROP SCHEMA IF EXISTS ai_chatbot CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE;` then restart |
-| `relation agent_messages does not exist` | Agent memory tables not created. Restart the app — `start_server.py` auto-creates them. Or run Cell 2 of `lakebase_setup_script.ipynb` |
+| `relation agent_messages does not exist` | Agent memory tables not created. Restart the app — `start_server.py` auto-creates them. Or run Cell 1 (install) then Cell 3 of `lakebase_setup_script.ipynb` |
 | `permission denied for schema` | SP can't access user-owned tables. Run the GRANT statements in Step 11 |
 | `permission denied for sequence` | Run the GRANT on sequences in Step 11 (sequences need separate grants) |
 | App crashes after deploy | Check `databricks apps logs` — usually a missing env var or permission issue |

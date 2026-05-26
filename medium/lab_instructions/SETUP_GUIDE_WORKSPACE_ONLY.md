@@ -80,8 +80,9 @@ Lakebase is a managed PostgreSQL database inside Databricks. Your app uses it to
 You need two paths that tell the app where your database lives. To find them:
 
 1. Open the notebook `medium/scripts/lakebase_setup_script.ipynb` in the workspace
-2. In **Cell 3**, replace `<project name>` with the project name you just created (e.g., `my-agent-workshop`)
-3. Run **Cell 3** — it will print output like:
+2. **Run Cell 1 first** (installs `databricks-openai[memory]` and `databricks-sdk`, restarts Python)
+3. In **Cell 4**, replace `<project name>` with the project name you just created (e.g., `my-agent-workshop`)
+4. Run **Cell 4** — it will print output like:
 
    ```json
    {
@@ -91,11 +92,11 @@ You need two paths that tell the app where your database lives. To find them:
    }
    ```
 
-4. From this output, note:
+5. From this output, note:
    - **Branch path**: `projects/my-agent-workshop/branches/production`
    - **Database path**: the full `name` value (e.g., `projects/my-agent-workshop/branches/production/databases/abc123def456`)
 
-> **Important:** Only run Cell 1 (optional, to verify endpoints) and Cell 3 (to find the database ID). **Do NOT run Cells 2, 4, or 5** — the app creates its own database tables automatically when it starts. Creating them manually beforehand will cause errors.
+> **Important:** Run **Cell 1** (install — required), **Cell 2** (optional, to verify branches/endpoints), and **Cell 4** (to find the database ID). **Do NOT run Cells 3, 5, or 6** — the app creates its own database tables automatically when it starts. Creating them manually beforehand will cause errors. Every cell has a banner comment at the top stating whether to run it.
 
 ---
 
@@ -240,8 +241,8 @@ targets:
 |---|---|---|
 | Resource type in `databricks.yml` | `postgres` with `branch:` and `database:` | `database` with `instance_name:` and `database_name:` |
 | Environment variable | `LAKEBASE_AUTOSCALING_ENDPOINT` (value_from resource) | `LAKEBASE_INSTANCE_NAME` (hardcoded value) |
-| What you need from Lakebase UI | Branch path + Database path (from notebook Cell 3) | Just the instance name you chose |
-| Lakebase setup notebook | Run Cell 3 to find database ID | Not needed |
+| What you need from Lakebase UI | Branch path + Database path (from notebook Cell 4) | Just the instance name you chose |
+| Lakebase setup notebook | Run Cell 1 (install) then Cell 4 to find database ID | Not needed |
 
 > **Note:** Everything else (Step 5b editing `agent.py`, Step 6 deployment, Step 7 verification) remains exactly the same regardless of which Lakebase type you use.
 
@@ -363,7 +364,7 @@ When the app starts, it creates its own database tables — you don't need to se
 - Agent memory tables (so the agent remembers conversation context)
 - A migration tracking table (internal bookkeeping)
 
-> **Do NOT manually create database tables before deploying.** If you previously ran any database setup cells (Cells 2/4/5 of `lakebase_setup_script.ipynb`), you need to clean up first:
+> **Do NOT manually create database tables before deploying.** If you previously ran any database setup cells (Cells 3/5/6 of `lakebase_setup_script.ipynb`), you need to clean up first:
 > ```sql
 > -- Run this in a notebook connected to your Lakebase instance:
 > DROP SCHEMA IF EXISTS ai_chatbot CASCADE;
@@ -452,9 +453,10 @@ The same rule applies: the app creates its own database tables automatically —
 This means the app's service account couldn't create database tables. Fix it by running the setup notebook cells:
 
 1. Open `medium/scripts/lakebase_setup_script.ipynb`
-2. Run **Cell 2** — creates agent memory tables
-3. Uncomment and run **Cell 4** — creates chat history tables
-4. Uncomment and run **Cell 5** — grants access permissions
+2. Run **Cell 1** if you haven't already (install)
+3. Run **Cell 3** — creates agent memory tables
+4. Uncomment and run **Cell 5** — creates chat history tables
+5. Uncomment and run **Cell 6** — grants access permissions
 
 Then tell the app that these tables already exist by running this SQL (in a notebook connected to your Lakebase):
 
@@ -510,7 +512,7 @@ If the agent responds with relevant answers, you're done!
 | `relation "ai_chatbot"."Chat" already exists` | You created database tables manually before deploying | Drop them and restart: run `DROP SCHEMA IF EXISTS ai_chatbot CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE;` in a notebook connected to Lakebase, then restart the app |
 | `permission denied for schema` | The app can't access tables you created | Same fix as above — drop schemas and let the app recreate them (it will own them this time) |
 | App shows **"Crashed"** | Usually a typo in `databricks.yml` | Click your app → Logs tab → scroll to the error. Most common: a placeholder like `<your-project>` wasn't replaced |
-| `Lakebase unavailable` | Wrong database path in config | Double-check the `branch:` and `database:` values in `databricks.yml` match what Cell 3 printed in Step 3 |
+| `Lakebase unavailable` | Wrong database path in config | Double-check the `branch:` and `database:` values in `databricks.yml` match what Cell 4 printed in Step 3 |
 | Agent doesn't use tools / "I don't have access to..." | Wrong URL in `agent.py` | Verify the catalog/schema/index in the URL matches Step 2 output. Remember: dots become slashes (`my_catalog.my_schema.index` → `my_catalog/my_schema/index`) |
 | `An app with the same name already exists` | Someone else deployed with the same name | Choose a different name in `databricks.yml`, or delete the old one: `databricks apps delete <name>` in Web Terminal |
 | Chat sidebar shows no history after refresh | Database migration failed silently | Check logs for `"❌ Database migration failed"` — usually means tables existed already (see first row) |
