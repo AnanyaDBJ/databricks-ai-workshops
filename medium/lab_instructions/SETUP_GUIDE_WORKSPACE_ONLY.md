@@ -218,6 +218,15 @@ resources:
             database_name: databricks_postgres
             instance_name: 'my-agent-workshop'
             permission: CAN_CONNECT_AND_CREATE
+        - name: 'genie'
+          genie_space:
+            space_id: '01abcdef12345678'                                       # ← from Step 2
+            permission: 'CAN_RUN'
+        - name: 'vs_index'
+          uc_securable:
+            securable_full_name: 'my_catalog.my_schema.policy_docs_index'      # ← from Step 2
+            securable_type: 'TABLE'
+            permission: 'SELECT'
 
 targets:
   dev:
@@ -271,7 +280,7 @@ You'll edit two files to tell the app about YOUR workspace resources. Navigate t
 
 ### 5a. Edit `databricks.yml`
 
-This file tells Databricks how to deploy your app and what resources it needs. Open it and find-and-replace these 5 placeholders:
+This file tells Databricks how to deploy your app and what resources it needs. Open it and find-and-replace these 7 placeholders:
 
 | Find this in the file | Replace with | Where you got it |
 |---|---|---|
@@ -279,7 +288,11 @@ This file tells Databricks how to deploy your app and what resources it needs. O
 | `"<your-experiment-id>"` | The number from Step 4 (e.g., `"1234567890123456"`) | Step 4 |
 | `"projects/<your-project>/branches/<branch-name>"` | Your branch path (e.g., `"projects/my-agent-workshop/branches/production"`) | Step 3 |
 | `"projects/<your-project>/branches/<branch-name>/databases/<your-database-id>"` | Your full database path (e.g., `"projects/my-agent-workshop/branches/production/databases/abc123"`) | Step 3 |
+| `'<your-genie-space-id>'` (under the `genie` resource) | Your Genie Space ID (e.g., `'01abcdef12345678'`) | Step 2 |
+| `'<your-catalog>.<your-schema>.policy_docs_index'` (under the `vs_index` resource) | Full UC name of the Vector Search index (e.g., `'my_catalog.my_schema.policy_docs_index'`) | Step 2 |
 | `https://<your-workspace>.cloud.databricks.com` | Your workspace URL (copy from your browser's address bar) | Browser |
+
+> **Why the `genie` and `vs_index` resources matter:** Without them, the deployed app's service principal has no access to Genie or the Vector Search index, and the agent will fail at runtime with `PERMISSION_DENIED: Unable to get space [...]` (or similar on the VS index).
 
 > **Tip:** The app name must be unique across your workspace. Adding your initials helps avoid conflicts (e.g., `agent-workshop-jsmith`).
 
@@ -301,6 +314,15 @@ resources:
             branch: "projects/my-agent-workshop/branches/production"         # ← from Step 3
             database: "projects/my-agent-workshop/branches/production/databases/abc123"  # ← from Step 3
             permission: 'CAN_CONNECT_AND_CREATE'
+        - name: 'genie'
+          genie_space:
+            space_id: '01abcdef12345678'                                       # ← from Step 2
+            permission: 'CAN_RUN'
+        - name: 'vs_index'
+          uc_securable:
+            securable_full_name: 'my_catalog.my_schema.policy_docs_index'      # ← from Step 2
+            securable_type: 'TABLE'
+            permission: 'SELECT'
 
 targets:
   dev:
@@ -514,6 +536,7 @@ If the agent responds with relevant answers, you're done!
 | App shows **"Crashed"** | Usually a typo in `databricks.yml` | Click your app → Logs tab → scroll to the error. Most common: a placeholder like `<your-project>` wasn't replaced |
 | `Lakebase unavailable` | Wrong database path in config | Double-check the `branch:` and `database:` values in `databricks.yml` match what Cell 4 printed in Step 3 |
 | Agent doesn't use tools / "I don't have access to..." | Wrong URL in `agent.py` | Verify the catalog/schema/index in the URL matches Step 2 output. Remember: dots become slashes (`my_catalog.my_schema.index` → `my_catalog/my_schema/index`) |
+| `PERMISSION_DENIED: Unable to get space [...]` or similar on the Vector Search index | The app's service principal has no access to the Genie Space or VS index | Make sure `databricks.yml` includes the `genie` and `vs_index` resources from Step 5a with your real Space ID and full index name, then redeploy: `databricks bundle deploy && databricks bundle run agent_openai_agents_sdk`. Or, for a one-off live grant, share the Genie Space + VS index with the app's SP in the workspace UI. |
 | `An app with the same name already exists` | Someone else deployed with the same name | Choose a different name in `databricks.yml`, or delete the old one: `databricks apps delete <name>` in Web Terminal |
 | Chat sidebar shows no history after refresh | Database migration failed silently | Check logs for `"❌ Database migration failed"` — usually means tables existed already (see first row) |
 | `databricks bundle validate` shows errors | Syntax error or unreplaced placeholder in YAML | Read the error message carefully — it usually points to the exact line. Check that all `<...>` placeholders are replaced |
