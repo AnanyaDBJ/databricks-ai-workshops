@@ -4,15 +4,14 @@
 # environment_version = "1"
 # ///
 # MAGIC %md
-# MAGIC    
-# MAGIC # EduPath Academy Workshop Setup
+# MAGIC # FreshMart Workshop Setup
 # MAGIC
 # MAGIC This notebook creates everything you need for the workshop:
 # MAGIC
 # MAGIC | Step | What it creates |
 # MAGIC |------|----------------|
 # MAGIC | 1 | Catalog and schema in Unity Catalog |
-# MAGIC | 2 | 6 education data tables (students, courses, campuses, enrollments, etc.) |
+# MAGIC | 2 | 6 retail data tables (customers, products, stores, transactions, etc.) |
 # MAGIC | 3 | Policy documents table (chunked for search) |
 # MAGIC | 4 | Vector Search endpoint and index |
 # MAGIC | 5 | Genie Space for natural language data queries |
@@ -34,10 +33,8 @@
 
 # COMMAND ----------
 
-if "catalog" not in dbutils.widgets.getAll():
-    dbutils.widgets.text("catalog", "", "Catalog Name")
-if "schema" not in dbutils.widgets.getAll():
-    dbutils.widgets.text("schema", "", "Schema Name")
+dbutils.widgets.text("catalog", "", "1. Catalog Name")
+dbutils.widgets.text("schema", "retail_grocery", "2. Schema Name")
 
 CATALOG = dbutils.widgets.get("catalog")
 SCHEMA = dbutils.widgets.get("schema")
@@ -62,16 +59,15 @@ print(f"Catalog '{CATALOG}' and schema '{FULL_SCHEMA}' are ready.")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC    
-# MAGIC ## Step 2: Create Education Data Tables
+# MAGIC ## Step 2: Create Retail Data Tables
 # MAGIC
-# MAGIC This generates synthetic data for a fictional online learning platform called **EduPath Academy**:
-# MAGIC - **customers** — 200 students with enrollment tiers and academic preferences
-# MAGIC - **products** — ~500 courses across 10 departments
-# MAGIC - **stores** — 10 EduPath campus locations
-# MAGIC - **transactions** — 2,000 enrollment records
-# MAGIC - **transaction_items** — ~8,000 course enrollment line items
-# MAGIC - **payment_history** — 400 tuition payment records
+# MAGIC This generates synthetic data for a fictional grocery chain called **FreshMart**:
+# MAGIC - **customers** — 200 shoppers with membership tiers and preferences
+# MAGIC - **products** — ~500 grocery items across 10 categories
+# MAGIC - **stores** — 10 FreshMart locations
+# MAGIC - **transactions** — 2,000 purchase records
+# MAGIC - **transaction_items** — ~8,000 line items
+# MAGIC - **payment_history** — 400 payment method records
 
 # COMMAND ----------
 
@@ -122,97 +118,96 @@ CITIES_STATES = [
     ("Minneapolis", "MN"), ("Nashville", "TN"), ("Salt Lake City", "UT"),
 ]
 
-MEMBERSHIP_TIERS = ["Freshman", "Sophomore", "Junior", "Senior"]
-LEARNING_STYLES = ["visual", "auditory", "reading", "kinesthetic", "hybrid", "self-paced", "collaborative", "none"]
-FAVORITE_DEPARTMENTS = ["Computer Science", "Mathematics", "Business", "Engineering", "Arts", "Sciences", "Humanities", "Health Sciences", "Education"]
-PAYMENT_METHODS = ["credit_card", "debit_card", "financial_aid", "scholarship", "wire_transfer"]
+MEMBERSHIP_TIERS = ["Bronze", "Silver", "Gold", "Platinum"]
+DIETARY_PREFS = ["vegetarian", "vegan", "gluten-free", "keto", "paleo", "dairy-free", "nut-free", "none"]
+FAVORITE_CATEGORIES = ["Produce", "Dairy", "Bakery", "Meat & Seafood", "Frozen", "Snacks", "Beverages", "Deli", "Organic"]
+PAYMENT_METHODS = ["credit_card", "debit_card", "cash", "mobile_pay", "gift_card"]
 
 PRODUCTS_BY_CATEGORY = {
-    "Computer Science": [
-        ("Introduction to Python", "Dr. Chen", 299.99, "3 credits"), ("Data Structures & Algorithms", "Dr. Kumar", 349.99, "4 credits"),
-        ("Machine Learning Fundamentals", "Dr. Zhang", 399.99, "3 credits"), ("Web Development", "Prof. Miller", 279.99, "3 credits"),
-        ("Database Systems", "Dr. Patel", 329.99, "3 credits"), ("Computer Networks", "Dr. Wilson", 349.99, "3 credits"),
-        ("Operating Systems", "Dr. Brown", 349.99, "4 credits"), ("Software Engineering", "Prof. Davis", 329.99, "3 credits"),
-        ("Cybersecurity Basics", "Dr. Thompson", 379.99, "3 credits"), ("Cloud Computing", "Dr. Garcia", 399.99, "3 credits"),
-        ("Artificial Intelligence", "Dr. Lee", 449.99, "4 credits"), ("Mobile App Development", "Prof. Taylor", 299.99, "3 credits"),
-        ("DevOps & CI/CD", "Dr. Martinez", 349.99, "3 credits"), ("Natural Language Processing", "Dr. Wang", 399.99, "3 credits"),
-        ("Computer Vision", "Dr. Singh", 399.99, "3 credits"), ("Blockchain Technology", "Prof. Anderson", 349.99, "3 credits"),
+    "Produce": [
+        ("Organic Bananas", "Dole", 0.79, "bunch"), ("Red Apples", "Honeycrisp", 2.49, "lb"),
+        ("Baby Spinach", "Earthbound", 3.99, "bag"), ("Avocados", "Hass", 1.49, "each"),
+        ("Roma Tomatoes", "Local Farm", 1.99, "lb"), ("Blueberries", "Driscoll's", 4.99, "pint"),
+        ("Sweet Potatoes", "Local Farm", 1.29, "lb"), ("Broccoli Crowns", "Green Giant", 2.49, "lb"),
+        ("Strawberries", "Driscoll's", 5.99, "pack"), ("Lemons", "Sunkist", 0.69, "each"),
+        ("Cucumbers", "English", 1.79, "each"), ("Bell Peppers", "Local Farm", 1.49, "each"),
+        ("Carrots", "Bolthouse", 1.99, "bag"), ("Russet Potatoes", "Idaho", 4.99, "5lb bag"),
+        ("Mixed Greens", "Taylor Farms", 4.49, "bag"), ("Grapes Red Seedless", "Chile", 3.49, "lb"),
     ],
-    "Mathematics": [
-        ("Calculus I", "Dr. Roberts", 249.99, "4 credits"), ("Linear Algebra", "Dr. Johnson", 279.99, "3 credits"),
-        ("Statistics & Probability", "Dr. Williams", 279.99, "3 credits"), ("Discrete Mathematics", "Dr. Jones", 249.99, "3 credits"),
-        ("Differential Equations", "Dr. Moore", 299.99, "3 credits"), ("Number Theory", "Prof. Clark", 279.99, "3 credits"),
-        ("Abstract Algebra", "Dr. Hall", 299.99, "3 credits"), ("Real Analysis", "Dr. Young", 329.99, "4 credits"),
-        ("Numerical Methods", "Prof. Wright", 299.99, "3 credits"), ("Combinatorics", "Dr. Allen", 279.99, "3 credits"),
-        ("Calculus II", "Dr. Roberts", 249.99, "4 credits"), ("Calculus III", "Dr. Hill", 279.99, "4 credits"),
-        ("Mathematical Modeling", "Prof. Green", 329.99, "3 credits"), ("Topology", "Dr. Baker", 349.99, "3 credits"),
+    "Dairy": [
+        ("Whole Milk", "Horizon Organic", 5.49, "gallon"), ("2% Milk", "Darigold", 4.29, "gallon"),
+        ("Greek Yogurt Plain", "Chobani", 5.99, "32oz"), ("Cheddar Cheese Block", "Tillamook", 5.99, "8oz"),
+        ("Butter Unsalted", "Kerrygold", 4.99, "8oz"), ("Heavy Cream", "Darigold", 3.99, "pint"),
+        ("Sour Cream", "Daisy", 2.49, "16oz"), ("Cream Cheese", "Philadelphia", 3.29, "8oz"),
+        ("Shredded Mozzarella", "Galbani", 4.49, "8oz"), ("Almond Milk", "Silk", 3.99, "half gallon"),
+        ("Oat Milk", "Oatly", 4.49, "half gallon"), ("Cottage Cheese", "Daisy", 3.99, "16oz"),
+        ("Parmesan Wedge", "BelGioioso", 6.99, "5oz"), ("Egg Dozen Large", "Pete & Gerry's", 5.49, "dozen"),
     ],
-    "Business": [
-        ("Principles of Management", "Prof. Adams", 299.99, "3 credits"), ("Financial Accounting", "Dr. Nelson", 329.99, "3 credits"),
-        ("Marketing Fundamentals", "Prof. Carter", 279.99, "3 credits"), ("Business Analytics", "Dr. Mitchell", 349.99, "3 credits"),
-        ("Entrepreneurship", "Prof. Rivera", 299.99, "3 credits"), ("Corporate Finance", "Dr. Campbell", 349.99, "3 credits"),
-        ("Operations Management", "Prof. Torres", 299.99, "3 credits"), ("Strategic Management", "Dr. Lewis", 329.99, "3 credits"),
-        ("Business Ethics", "Prof. Robinson", 249.99, "3 credits"), ("International Business", "Dr. Walker", 299.99, "3 credits"),
-        ("Supply Chain Management", "Prof. Perez", 329.99, "3 credits"), ("Human Resource Management", "Dr. Sanchez", 279.99, "3 credits"),
+    "Bakery": [
+        ("Sourdough Bread", "Bakery Fresh", 4.99, "loaf"), ("Whole Wheat Bread", "Dave's Killer", 5.49, "loaf"),
+        ("Croissants", "Bakery Fresh", 3.99, "4 pack"), ("Bagels Everything", "Bakery Fresh", 4.49, "6 pack"),
+        ("Baguette", "Bakery Fresh", 2.99, "each"), ("Cinnamon Rolls", "Bakery Fresh", 5.99, "4 pack"),
+        ("Tortillas Flour", "Mission", 3.49, "10 pack"), ("Hamburger Buns", "Bakery Fresh", 3.99, "8 pack"),
+        ("Multigrain Bread", "Bakery Fresh", 4.49, "loaf"), ("Dinner Rolls", "Bakery Fresh", 3.49, "12 pack"),
     ],
-    "Engineering": [
-        ("Statics & Dynamics", "Dr. Thompson", 349.99, "4 credits"), ("Thermodynamics", "Dr. White", 349.99, "3 credits"),
-        ("Circuit Analysis", "Prof. Harris", 329.99, "3 credits"), ("Fluid Mechanics", "Dr. Martin", 349.99, "3 credits"),
-        ("Materials Science", "Dr. Jackson", 299.99, "3 credits"), ("Control Systems", "Prof. Taylor", 349.99, "3 credits"),
-        ("Engineering Design", "Dr. Anderson", 279.99, "4 credits"), ("Signal Processing", "Dr. Thomas", 379.99, "3 credits"),
-        ("Robotics Fundamentals", "Prof. Garcia", 399.99, "3 credits"), ("Structural Analysis", "Dr. Martinez", 349.99, "4 credits"),
-        ("Heat Transfer", "Dr. Robinson", 329.99, "3 credits"), ("Engineering Ethics", "Prof. Clark", 199.99, "2 credits"),
+    "Meat & Seafood": [
+        ("Chicken Breast Boneless", "Foster Farms", 6.99, "lb"), ("Ground Beef 80/20", "Angus", 5.99, "lb"),
+        ("Atlantic Salmon Fillet", "Fresh Catch", 12.99, "lb"), ("Pork Chops", "Smithfield", 4.99, "lb"),
+        ("Bacon Thick Cut", "Applegate", 7.99, "12oz"), ("Shrimp Large Peeled", "Wild Caught", 11.99, "lb"),
+        ("Turkey Breast Deli", "Boar's Head", 9.99, "lb"), ("Italian Sausage", "Johnsonville", 5.49, "pack"),
+        ("Ribeye Steak", "USDA Choice", 14.99, "lb"), ("Ground Turkey", "Jennie-O", 5.49, "lb"),
+        ("Tilapia Fillet", "Fresh Catch", 7.99, "lb"), ("Lamb Chops", "New Zealand", 13.99, "lb"),
     ],
-    "Arts & Humanities": [
-        ("Introduction to Philosophy", "Dr. King", 229.99, "3 credits"), ("World History I", "Prof. Wright", 249.99, "3 credits"),
-        ("Creative Writing", "Prof. Scott", 229.99, "3 credits"), ("Art History", "Dr. Flores", 249.99, "3 credits"),
-        ("Music Theory", "Prof. Green", 249.99, "3 credits"), ("Introduction to Sociology", "Dr. Adams", 229.99, "3 credits"),
-        ("Cultural Anthropology", "Dr. Nelson", 249.99, "3 credits"), ("Film Studies", "Prof. Baker", 229.99, "3 credits"),
-        ("Ethics & Society", "Dr. Hall", 229.99, "3 credits"), ("Comparative Literature", "Prof. Young", 249.99, "3 credits"),
+    "Frozen": [
+        ("Frozen Pizza Margherita", "Amy's", 8.99, "each"), ("Ice Cream Vanilla", "Tillamook", 5.99, "1.5qt"),
+        ("Frozen Vegetables Mixed", "Birds Eye", 2.99, "bag"), ("Frozen Berries Mixed", "Wyman's", 5.49, "bag"),
+        ("Frozen Waffles", "Eggo", 3.49, "10 pack"), ("Frozen Burritos", "Amy's", 3.49, "each"),
+        ("Fish Sticks", "Gorton's", 4.99, "box"), ("Frozen Edamame", "Seapoint Farms", 3.49, "bag"),
+        ("Ice Cream Bars", "Haagen-Dazs", 5.99, "3 pack"), ("Frozen Mac & Cheese", "Stouffer's", 3.99, "each"),
     ],
-    "Natural Sciences": [
-        ("General Chemistry I", "Dr. Nguyen", 299.99, "4 credits"), ("General Physics I", "Dr. Hill", 299.99, "4 credits"),
-        ("Biology I", "Dr. Flores", 279.99, "4 credits"), ("Organic Chemistry", "Dr. Rivera", 349.99, "4 credits"),
-        ("Environmental Science", "Prof. Torres", 249.99, "3 credits"), ("Astronomy", "Dr. Campbell", 229.99, "3 credits"),
-        ("Genetics", "Dr. Mitchell", 299.99, "3 credits"), ("Biochemistry", "Dr. Carter", 349.99, "4 credits"),
-        ("Ecology", "Prof. Sanchez", 249.99, "3 credits"), ("Geology", "Dr. Perez", 249.99, "3 credits"),
-        ("General Physics II", "Dr. Hill", 299.99, "4 credits"), ("General Chemistry II", "Dr. Nguyen", 299.99, "4 credits"),
+    "Snacks": [
+        ("Potato Chips Sea Salt", "Kettle Brand", 4.49, "bag"), ("Trail Mix", "Kirkland", 8.99, "bag"),
+        ("Granola Bars", "Nature Valley", 3.99, "6 pack"), ("Pretzels Twists", "Snyder's", 3.49, "bag"),
+        ("Dark Chocolate Bar", "Lindt", 3.99, "bar"), ("Popcorn Butter", "SkinnyPop", 4.49, "bag"),
+        ("Crackers Wheat", "Triscuit", 3.99, "box"), ("Hummus Classic", "Sabra", 4.49, "10oz"),
+        ("Mixed Nuts Roasted", "Planters", 7.99, "can"), ("Rice Cakes", "Lundberg", 3.49, "bag"),
+        ("Tortilla Chips", "Late July", 3.99, "bag"), ("Fruit Snacks", "Annie's", 4.49, "box"),
     ],
-    "Health Sciences": [
-        ("Human Anatomy", "Dr. Lewis", 329.99, "4 credits"), ("Physiology", "Dr. Walker", 329.99, "4 credits"),
-        ("Nutrition Science", "Prof. Robinson", 249.99, "3 credits"), ("Public Health", "Dr. Allen", 279.99, "3 credits"),
-        ("Pharmacology", "Dr. Young", 349.99, "3 credits"), ("Epidemiology", "Prof. King", 299.99, "3 credits"),
-        ("Health Informatics", "Dr. Wright", 329.99, "3 credits"), ("Clinical Psychology", "Dr. Scott", 299.99, "3 credits"),
-        ("Biostatistics", "Prof. Green", 299.99, "3 credits"), ("Healthcare Management", "Dr. Baker", 279.99, "3 credits"),
+    "Beverages": [
+        ("Orange Juice", "Tropicana", 4.99, "52oz"), ("Sparkling Water Lime", "LaCroix", 5.49, "12 pack"),
+        ("Coffee Ground Medium", "Stumptown", 12.99, "12oz bag"), ("Green Tea Bags", "Tazo", 4.49, "20 bags"),
+        ("Kombucha Ginger", "GT's", 3.99, "16oz"), ("Apple Juice", "Martinelli's", 3.49, "1.5L"),
+        ("Cold Brew Coffee", "Stumptown", 4.99, "12oz"), ("Coconut Water", "Vita Coco", 2.99, "16oz"),
+        ("Lemonade", "Simply", 3.49, "52oz"), ("Sports Drink", "Gatorade", 1.49, "32oz"),
     ],
-    "Education": [
-        ("Educational Psychology", "Dr. Hall", 249.99, "3 credits"), ("Curriculum Design", "Prof. Adams", 279.99, "3 credits"),
-        ("Classroom Management", "Dr. Nelson", 249.99, "3 credits"), ("Assessment & Evaluation", "Prof. Carter", 249.99, "3 credits"),
-        ("Special Education", "Dr. Mitchell", 279.99, "3 credits"), ("Educational Technology", "Prof. Rivera", 299.99, "3 credits"),
-        ("Early Childhood Education", "Dr. Torres", 249.99, "3 credits"), ("Adult Learning Theory", "Prof. Campbell", 249.99, "3 credits"),
-        ("Multicultural Education", "Dr. Sanchez", 249.99, "3 credits"), ("Instructional Design", "Prof. Perez", 279.99, "3 credits"),
+    "Pantry": [
+        ("Olive Oil Extra Virgin", "California Olive Ranch", 9.99, "bottle"), ("Pasta Spaghetti", "Barilla", 1.79, "box"),
+        ("Marinara Sauce", "Rao's", 7.99, "jar"), ("Rice Jasmine", "Mahatma", 4.99, "2lb bag"),
+        ("Black Beans", "Goya", 1.29, "can"), ("Chicken Broth", "Swanson", 2.49, "32oz"),
+        ("Peanut Butter", "Jif", 3.99, "jar"), ("Honey", "Local Harvest", 8.99, "16oz"),
+        ("Canned Tuna", "Wild Planet", 3.49, "can"), ("Coconut Milk", "Thai Kitchen", 2.49, "can"),
+        ("Maple Syrup", "Grade A", 9.99, "12oz"), ("Flour All Purpose", "King Arthur", 4.49, "5lb bag"),
+        ("Sugar Granulated", "C&H", 3.99, "4lb bag"), ("Soy Sauce", "Kikkoman", 3.49, "10oz"),
     ],
-    "Communications": [
-        ("Public Speaking", "Prof. Lewis", 229.99, "3 credits"), ("Mass Media & Society", "Dr. Walker", 249.99, "3 credits"),
-        ("Digital Marketing", "Prof. Robinson", 299.99, "3 credits"), ("Journalism Fundamentals", "Dr. Allen", 249.99, "3 credits"),
-        ("Visual Communication", "Prof. King", 279.99, "3 credits"), ("Social Media Strategy", "Dr. Wright", 279.99, "3 credits"),
-        ("Technical Writing", "Prof. Scott", 229.99, "3 credits"), ("Intercultural Communication", "Dr. Flores", 249.99, "3 credits"),
-        ("Media Production", "Prof. Green", 329.99, "3 credits"), ("Communication Research", "Dr. Baker", 249.99, "3 credits"),
+    "Deli": [
+        ("Roast Turkey Breast", "Boar's Head", 10.99, "lb"), ("Ham Black Forest", "Boar's Head", 9.99, "lb"),
+        ("Swiss Cheese Sliced", "Boar's Head", 8.99, "lb"), ("Chicken Salad", "Deli Fresh", 7.99, "lb"),
+        ("Potato Salad", "Deli Fresh", 4.99, "lb"), ("Rotisserie Chicken", "Store Made", 8.99, "each"),
+        ("Coleslaw", "Deli Fresh", 3.99, "lb"), ("Macaroni Salad", "Deli Fresh", 4.49, "lb"),
     ],
-    "Languages": [
-        ("Spanish I", "Prof. Garcia", 229.99, "3 credits"), ("French I", "Prof. Martin", 229.99, "3 credits"),
-        ("Mandarin Chinese I", "Dr. Wang", 249.99, "3 credits"), ("Japanese I", "Prof. Tanaka", 249.99, "3 credits"),
-        ("German I", "Prof. Fischer", 229.99, "3 credits"), ("Arabic I", "Dr. Hassan", 249.99, "3 credits"),
-        ("English Composition", "Prof. Roberts", 199.99, "3 credits"), ("Advanced Academic Writing", "Dr. Johnson", 229.99, "3 credits"),
-        ("Spanish II", "Prof. Garcia", 249.99, "3 credits"), ("French II", "Prof. Martin", 249.99, "3 credits"),
+    "Household": [
+        ("Paper Towels", "Bounty", 12.99, "6 roll"), ("Dish Soap", "Dawn", 3.99, "bottle"),
+        ("Trash Bags", "Glad", 9.99, "45 count"), ("Laundry Detergent", "Tide", 11.99, "bottle"),
+        ("Aluminum Foil", "Reynolds", 4.49, "roll"), ("Sponges", "Scotch-Brite", 3.49, "3 pack"),
+        ("Ziplock Bags Gallon", "Ziploc", 4.99, "30 count"), ("All Purpose Cleaner", "Method", 4.49, "bottle"),
     ],
 }
 
-CAMPUS_NAMES = [
-    "EduPath Main Campus", "EduPath Westside", "EduPath Downtown Center",
-    "EduPath Technology Hub", "EduPath Lake Campus", "EduPath North Campus",
-    "EduPath Arts Center", "EduPath Science Park", "EduPath Business School",
-    "EduPath Health Sciences",
+STORE_NAMES = [
+    "FreshMart Downtown", "FreshMart Westside", "FreshMart Pearl District",
+    "FreshMart Hawthorne", "FreshMart Lake Oswego", "FreshMart Beaverton",
+    "FreshMart Sellwood", "FreshMart Alberta", "FreshMart Division",
+    "FreshMart Hillsdale",
 ]
 
 
@@ -221,7 +216,7 @@ def random_phone():
 
 
 def random_email(first, last):
-    domains = ["gmail.com", "yahoo.com", "outlook.com", "university.edu", "student.edu"]
+    domains = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"]
     sep = random.choice([".", "_", ""])
     num = random.choice(["", str(random.randint(1, 99))])
     return f"{first.lower()}{sep}{last.lower()}{num}@{random.choice(domains)}"
@@ -232,8 +227,7 @@ print("Domain data loaded. Generating tables...")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC    
-# MAGIC ### Students (200 rows)
+# MAGIC ### Customers (200 rows)
 
 # COMMAND ----------
 
@@ -243,9 +237,9 @@ for i in range(1, 201):
     last = random.choice(LAST_NAMES)
     city, state = random.choice(CITIES_STATES)
     prefs = {
-        "learning_style": random.sample(LEARNING_STYLES, k=random.randint(0, 2)),
-        "favorite_departments": random.sample(FAVORITE_DEPARTMENTS, k=random.randint(1, 3)),
-        "full_time": random.choice([True, False]),
+        "dietary": random.sample(DIETARY_PREFS, k=random.randint(0, 2)),
+        "favorite_categories": random.sample(FAVORITE_CATEGORIES, k=random.randint(1, 3)),
+        "organic_preference": random.choice([True, False]),
     }
     customers.append({
         "customer_id": f"CUST-{i:04d}",
@@ -269,45 +263,44 @@ print(f"Created {FULL_SCHEMA}.customers — {customers_df.count()} rows")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC    
-# MAGIC ### Courses (~500 rows)
+# MAGIC ### Products (~500 rows)
 
 # COMMAND ----------
 
 products = []
 pid = 1
-buildings = {}
-building_num = 1
+aisles = {}
+aisle_num = 1
 for cat in PRODUCTS_BY_CATEGORY:
-    if cat not in buildings:
-        buildings[cat] = building_num
-        building_num += 1
-    for name, instructor, price, unit in PRODUCTS_BY_CATEGORY[cat]:
+    if cat not in aisles:
+        aisles[cat] = aisle_num
+        aisle_num += 1
+    for name, brand, price, unit in PRODUCTS_BY_CATEGORY[cat]:
         products.append({
             "product_id": f"PROD-{pid:04d}",
             "name": name,
             "category": cat,
-            "brand": instructor,
+            "brand": brand,
             "price": round(price, 2),
-            "stock_quantity": random.randint(15, 120),  # available seats
-            "aisle": buildings[cat],  # building number
+            "stock_quantity": random.randint(0, 500),
+            "aisle": aisles[cat],
             "unit": unit,
         })
         pid += 1
 
-# Pad to ~500 courses with level variations
+# Pad to ~500 products with variations
 while len(products) < 500:
     cat = random.choice(list(PRODUCTS_BY_CATEGORY.keys()))
     base = random.choice(PRODUCTS_BY_CATEGORY[cat])
-    variation = random.choice(["Advanced ", "Honors ", "Graduate ", "Intensive ", "Online "])
+    variation = random.choice(["Organic ", "Family Size ", "Value Pack ", "Premium ", "Lite "])
     products.append({
         "product_id": f"PROD-{pid:04d}",
         "name": f"{variation}{base[0]}",
         "category": cat,
         "brand": base[1],
         "price": round(base[2] * random.uniform(0.8, 1.5), 2),
-        "stock_quantity": random.randint(15, 120),
-        "aisle": buildings[cat],
+        "stock_quantity": random.randint(0, 500),
+        "aisle": aisles[cat],
         "unit": base[3],
     })
     pid += 1
@@ -319,13 +312,12 @@ print(f"Created {FULL_SCHEMA}.products — {products_df.count()} rows")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC    
-# MAGIC ### Campuses (10 rows)
+# MAGIC ### Stores (10 rows)
 
 # COMMAND ----------
 
 stores = []
-for i, name in enumerate(CAMPUS_NAMES, 1):
+for i, name in enumerate(STORE_NAMES, 1):
     city, state = CITIES_STATES[i % len(CITIES_STATES)]
     stores.append({
         "store_id": f"STORE-{i:02d}",
@@ -345,8 +337,7 @@ print(f"Created {FULL_SCHEMA}.stores — {stores_df.count()} rows")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC    
-# MAGIC ### Enrollments (2,000 rows) and Enrollment Items (~8,000 rows)
+# MAGIC ### Transactions (2,000 rows) and Transaction Items (~8,000 rows)
 
 # COMMAND ----------
 
@@ -362,13 +353,13 @@ for txn_id in range(1, 2001):
         hours=random.randint(7, 21),
         minutes=random.randint(0, 59),
     )
-    num_items = random.randint(2, 6)  # courses per enrollment
+    num_items = random.randint(2, 8)
     txn_products = random.sample(products, k=min(num_items, len(products)))
 
     total = 0.0
     for prod in txn_products:
-        qty = 1  # typically 1 section per course
-        discount = round(random.choice([0.0, 0.0, 0.0, 25.0, 50.0, 75.0, 100.0]), 2)  # scholarship discounts
+        qty = random.randint(1, 5)
+        discount = round(random.choice([0.0, 0.0, 0.0, 0.5, 1.0, 1.5, 2.0]), 2)
         unit_price = prod["price"]
         line_total = round(qty * unit_price - discount, 2)
         total += line_total
@@ -390,7 +381,7 @@ for txn_id in range(1, 2001):
         "transaction_date": txn_date.strftime("%Y-%m-%d %H:%M:%S"),
         "total_amount": round(total, 2),
         "payment_method": random.choice(PAYMENT_METHODS),
-        "status": random.choices(["completed", "withdrawn", "pending"], weights=[85, 10, 5])[0],
+        "status": random.choices(["completed", "refunded", "pending"], weights=[90, 7, 3])[0],
     })
 
 transactions_df = spark.createDataFrame(transactions)
@@ -404,8 +395,7 @@ print(f"Created {FULL_SCHEMA}.transaction_items — {transaction_items_df.count(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC    
-# MAGIC ### Tuition Payment History (400 rows)
+# MAGIC ### Payment History (400 rows)
 
 # COMMAND ----------
 
@@ -443,31 +433,9 @@ for table in tables:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 3: Create Policy Documents Datasets in local repository
-# MAGIC
-# MAGIC This codebase creates synthetic data in a newly generated edu_policy_docs subfolder in the data folder . This holds all the policy documents that vector search index will be utilising
-
-# COMMAND ----------
-
-import os
-import sys
-
-# Add the notebook directory to the path so we can import the script
-notebook_dir = os.path.dirname(os.path.abspath(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()))
-sys.path.insert(0, f"/Workspace{notebook_dir}")
-
-from generate_edu_policy_docs import generate_docs, EDU_POLICY_DOCS
-
-edu_docs_dir = os.path.join(os.path.dirname(os.path.abspath(".")), "edu_policy_docs")
-generate_docs(edu_docs_dir)
-print(f"Created {len(EDU_POLICY_DOCS)} policy documents in: {edu_docs_dir}")
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC ## Step 3: Create Policy Documents Table
 # MAGIC
-# MAGIC This reads the 7 Education policy documents from the `data/policy_docs/` directory, splits them into
+# MAGIC This reads the 7 FreshMart policy documents from the `data/policy_docs/` directory, splits them into
 # MAGIC overlapping text chunks, and writes them to a table that Vector Search will index.
 
 # COMMAND ----------
@@ -481,17 +449,17 @@ CHUNK_OVERLAP = 200
 # Locate the policy_docs directory relative to this notebook
 # In a Databricks Repo, the repo root is available via the workspace file system
 notebook_path = dbutils.entry_point.getDbutils().notebook().getContext().notebookPath().get()
-repo_root = "/".join(notebook_path.split("/")[:-2])  # go up from simple/00_quickstart_setup
-docs_dir = f"/Workspace{repo_root}/data/edu_policy_docs"
+repo_root = "/".join(notebook_path.split("/")[:-3])  # go up from data/workspace_setup_script/01_quickstart_setup
+docs_dir = f"/Workspace{repo_root}/data/policy_docs"
 
 # Fallback: try relative path if running locally or in a different context
 if not os.path.isdir(docs_dir):
-    docs_dir = os.path.join(os.path.dirname(os.path.abspath(".")), "edu_policy_docs")
+    docs_dir = os.path.join(os.path.dirname(os.path.abspath(".")), "policy_docs")
 if not os.path.isdir(docs_dir):
     raise FileNotFoundError(
         f"Could not find policy_docs directory. Looked in:\n"
-        f"  /Workspace{repo_root}/data/edu_policy_docs\n"
-        f"  {os.path.join(os.path.dirname(os.path.abspath('.')), 'edu_policy_docs')}\n"
+        f"  /Workspace{repo_root}/data/policy_docs\n"
+        f"  {os.path.join(os.path.dirname(os.path.abspath('.')), 'policy_docs')}\n"
         f"Make sure you cloned the full repository."
     )
 
@@ -563,7 +531,6 @@ print(f"\nCreated {FULL_SCHEMA}.policy_docs_chunked — {chunks_df.count()} chun
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC    
 # MAGIC ## Step 4: Create Vector Search Endpoint and Index
 # MAGIC
 # MAGIC Vector Search lets you find relevant policy documents using natural language instead of exact keyword matches.
@@ -587,7 +554,7 @@ from databricks.sdk.service.vectorsearch import (
 
 w = WorkspaceClient()
 
-VS_ENDPOINT_NAME = f"edupath-vs-{SCHEMA.strip().replace('_', '-')}"
+VS_ENDPOINT_NAME = f"freshmart-vs-{SCHEMA.replace('_', '-')}"
 VS_INDEX_NAME = f"{FULL_SCHEMA}.policy_docs_index"
 
 # --- Create endpoint (or reuse existing) ---
@@ -629,43 +596,31 @@ from databricks.vector_search.client import VectorSearchClient
 
 client = VectorSearchClient()
 
-# Delete the existing index if it exists
-try:
-    client.delete_index(
-        endpoint_name=VS_ENDPOINT_NAME,
-        index_name=VS_INDEX_NAME,
-        # force=True
-    )
-    print(f"Deleted existing index: {VS_INDEX_NAME}")
-except Exception as e:
-    print(f"No existing index to delete or error occurred: {e}")
-
-# Create a new index
 index = client.create_delta_sync_index(
-    endpoint_name=VS_ENDPOINT_NAME,
-    source_table_name=f"{FULL_SCHEMA}.policy_docs_chunked",
-    index_name=VS_INDEX_NAME,
-    pipeline_type="TRIGGERED",
-    primary_key="chunk_id",
-    embedding_source_column="content",
-    embedding_model_endpoint_name="databricks-gte-large-en",
+  endpoint_name=VS_ENDPOINT_NAME,
+  source_table_name=f"{FULL_SCHEMA}.policy_docs_chunked",
+  index_name=VS_INDEX_NAME,
+  pipeline_type="TRIGGERED",
+  primary_key="chunk_id",
+  embedding_source_column="content",
+  embedding_model_endpoint_name="databricks-gte-large-en",
 )
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC    
 # MAGIC ## Step 5: Create Genie Space
 # MAGIC
 # MAGIC Genie lets you ask questions about your data in plain English. It converts your questions into SQL automatically.
 # MAGIC
-# MAGIC This creates a Genie Space connected to all 6 EduPath Academy data tables.
+# MAGIC This creates a Genie Space connected to all 6 FreshMart data tables.
 
 # COMMAND ----------
 
 import json
 
-GENIE_SPACE_TITLE = f"EduPath_Academy_Data_({SCHEMA})"
+GENIE_SPACE_TITLE = f"FreshMart Retail Data ({SCHEMA})"
+
 
 # Get the first available SQL warehouse
 warehouses = w.warehouses.list()
@@ -702,9 +657,9 @@ else:
         response = w.api_client.do("POST", "/api/2.0/genie/spaces", body={
             "title": GENIE_SPACE_TITLE,
             "description": (
-                "EduPath Academy education data for the AI workshop. "
-                "Contains student information, course catalog, campus locations, "
-                "enrollment history, and tuition payment records."
+                "FreshMart retail grocery data for the AI workshop. "
+                "Contains customer information, product catalog, store locations, "
+                "transaction history, and payment records."
             ),
             "warehouse_id": warehouse_id,
             "serialized_space": serialized,
@@ -715,7 +670,6 @@ else:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC    
 # MAGIC ## Step 6: Create MLflow Experiment
 # MAGIC
 # MAGIC MLflow tracks your agent's performance. This creates an experiment where traces and evaluation metrics will be logged.
@@ -727,7 +681,7 @@ import mlflow
 mlflow.set_tracking_uri("databricks")
 
 username = spark.sql("SELECT current_user()").collect()[0][0]
-experiment_name = f"/Users/{username}/edupath-agent-workshop"
+experiment_name = f"/Users/{username}/freshmart-agent-workshop"
 
 try:
     experiment = mlflow.get_experiment_by_name(experiment_name)
@@ -743,34 +697,7 @@ except Exception:
 
 # COMMAND ----------
 
-from pyspark.sql.functions import pandas_udf
-from pyspark.sql.types import ArrayType, IntegerType
-import pandas as pd
-
-# Register as a Python UC function in the same schema
-spark.sql(f"""
-CREATE OR REPLACE FUNCTION {FULL_SCHEMA}.student_forecast(
-    current_students INT,
-    monthly_growth INT
-)
-RETURNS ARRAY<INT>
-LANGUAGE PYTHON
-AS $$
-def deterministic_student_forecast(current_students: int, monthly_growth: int = 10) -> list:
-    return [current_students + monthly_growth * i for i in range(1, 7)]
-return deterministic_student_forecast(current_students, monthly_growth)
-$$
-""")
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select ${catalog}.${schema}.student_forecast(20, 10) as result
-
-# COMMAND ----------
-
 # MAGIC %md
-# MAGIC    
 # MAGIC ## Setup Complete
 # MAGIC
 # MAGIC All resources have been created. Here's a summary of everything that's ready for you:
@@ -778,7 +705,7 @@ $$
 # COMMAND ----------
 
 print("=" * 70)
-print("  EDUPATH ACADEMY WORKSHOP SETUP COMPLETE")
+print("  FRESHMART WORKSHOP SETUP COMPLETE")
 print("=" * 70)
 print()
 print(f"  Catalog/Schema:     {FULL_SCHEMA}")
