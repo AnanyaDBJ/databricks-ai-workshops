@@ -517,6 +517,7 @@ If the agent responds with relevant answers, you're done!
 | `An app with the same name already exists` | Someone else deployed with the same name | Choose a different name in `databricks.yml`, or delete the old one: `databricks apps delete <name>` in Web Terminal |
 | Chat sidebar shows no history after refresh | Database migration failed silently | Check logs for `"❌ Database migration failed"` — usually means tables existed already (see first row) |
 | `databricks bundle validate` shows errors | Syntax error or unreplaced placeholder in YAML | Read the error message carefully — it usually points to the exact line. Check that all `<...>` placeholders are replaced |
+| `Failed to snapshot source code … terraform-provider-databricks_v1.115.0 is larger than the maximum allowed file size of 52428800 bytes` | The bundle's `.databricks/` Terraform state dir is being included in the Apps source snapshot | `databricks.yml` should include a `sync.exclude` block listing `.databricks` (see top of `medium/databricks.yml`). If working from a stale fork, `git pull` first. Then in the Web Terminal: `rm -rf .databricks && databricks bundle deploy && databricks bundle run agent_openai_agents_sdk` |
 | Vector Search returns no results | Index hasn't finished syncing | Wait 5-10 minutes after Step 2 completes. You can check sync status in Catalog Explorer → find your index → check the Sync tab |
 
 ---

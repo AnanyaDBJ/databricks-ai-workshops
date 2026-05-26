@@ -349,6 +349,7 @@ curl -X POST ${APP_URL}/invocations \
 | App crashes after deploy | Check `databricks apps logs` — usually a missing env var or permission issue |
 | Frontend shows no chat history | Verify `PGDATABASE` and `PGPORT` are set in `databricks.yml` and the postgres resource is bound. Check migration ran successfully in logs. |
 | `databricks bundle deploy` says "unknown field" | Databricks CLI too old — upgrade to v0.295.0+ |
+| `Failed to snapshot source code. Error: File … .databricks/bundle/dev/terraform/… is larger than the maximum allowed file size of 52428800 bytes` | The bundle's `.databricks/` Terraform state dir is being included in the Apps source snapshot. `databricks.yml` should have a `sync.exclude` block listing `.databricks` (see top of `medium/databricks.yml`). If you're working from a stale fork, pull the latest. Then `rm -rf .databricks && databricks bundle deploy && databricks bundle run agent_openai_agents_sdk`. |
 | `An app with the same name already exists` | Delete: `databricks apps delete <name>` or bind: `databricks bundle deployment bind agent_openai_agents_sdk <name> --auto-approve` |
 | MCP tools not responding | Verify URLs in `agent.py` MCP_SERVERS match the resources created in Step 2. Format: `/api/2.0/mcp/vector-search/catalog/schema/index` |
 | Vector Search returns no results | Index may not be synced. Wait 5-10 min after creation, or trigger sync manually in Catalog Explorer. |
