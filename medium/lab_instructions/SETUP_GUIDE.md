@@ -168,6 +168,15 @@ resources:
             branch: "projects/<your-project>/branches/<your-branch>"
             database: "projects/<your-project>/branches/<your-branch>/databases/<your-db>"
             permission: 'CAN_CONNECT_AND_CREATE'
+        - name: 'genie'
+          genie_space:
+            space_id: '<your-genie-space-id>'
+            permission: 'CAN_RUN'
+        - name: 'vs_index'
+          uc_securable:
+            securable_full_name: '<your-catalog>.<your-schema>.policy_docs_index'
+            securable_type: 'TABLE'
+            permission: 'SELECT'
 ```
 
 Also update the workspace `host` in `targets`:
@@ -333,8 +342,10 @@ curl -X POST ${APP_URL}/invocations \
 | `<your-lakebase-hostname>` | PGHOST value (from Lakebase connection info) |
 | `<your-email>` | Your Databricks login email (for PGUSER locally) |
 | `<your-app-name>` | Name you choose for the Databricks App |
-| `<catalog>/<schema>/<index-name>` | Vector Search index from Step 2 |
-| `<genie-space-id>` | Genie Space ID from Step 2 |
+| `<catalog>/<schema>/<index-name>` | Vector Search index from Step 2 (used in `agent.py` MCP_SERVERS) |
+| `<genie-space-id>` | Genie Space ID from Step 2 (used in `agent.py` MCP_SERVERS) |
+| `<your-genie-space-id>` (in `databricks.yml` `genie` resource) | Same Genie Space ID — granted to the app's SP at deploy time so the agent can call it |
+| `<your-catalog>.<your-schema>.policy_docs_index` (in `databricks.yml` `vs_index` resource) | Vector Search index full UC name — granted to the app's SP at deploy time |
 
 ---
 
@@ -352,6 +363,7 @@ curl -X POST ${APP_URL}/invocations \
 | `Failed to snapshot source code. Error: File … .databricks/bundle/dev/terraform/… is larger than the maximum allowed file size of 52428800 bytes` | The bundle's `.databricks/` Terraform state dir is being included in the Apps source snapshot. `databricks.yml` should have a `sync.exclude` block listing `.databricks` (see top of `medium/databricks.yml`). If you're working from a stale fork, pull the latest. Then `rm -rf .databricks && databricks bundle deploy && databricks bundle run agent_openai_agents_sdk`. |
 | `An app with the same name already exists` | Delete: `databricks apps delete <name>` or bind: `databricks bundle deployment bind agent_openai_agents_sdk <name> --auto-approve` |
 | MCP tools not responding | Verify URLs in `agent.py` MCP_SERVERS match the resources created in Step 2. Format: `/api/2.0/mcp/vector-search/catalog/schema/index` |
+| `PERMISSION_DENIED: Unable to get space [...]` or similar on the VS index | The app's service principal doesn't have access. Confirm `databricks.yml` has `genie` and `vs_index` resources with the right IDs/full names (see Step 7), then `databricks bundle deploy` again. Or grant manually in the Genie/Catalog UI to the SP. |
 | Vector Search returns no results | Index may not be synced. Wait 5-10 min after creation, or trigger sync manually in Catalog Explorer. |
 
 ---
