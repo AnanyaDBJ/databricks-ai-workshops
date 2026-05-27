@@ -65,10 +65,12 @@ In the Databricks UI, create an **autoscaling** Lakebase project:
 Find your connection details using the helper notebook:
 
 1. Open `medium/scripts/lakebase_setup_script.ipynb` in your workspace
-2. In Cell 3, replace `<project name>` with your project name
-3. Run Cell 3 — note the **branch path** and **database path** from the output
+2. In **Cell 4**, replace `<project name>` with your project name
+3. Run **Cell 4** — note the **branch path** and **database path** from the output
 
-> **Important:** Only run Cell 1 (optional) and Cell 3. Do NOT run Cells 2, 4, or 5 — the app creates its own tables automatically.
+> **Important:** Each cell has a banner saying whether to run it. The default flow is:
+> - **Run** Cell 1 (install, required), Cell 2 (optional — lists branches), and Cell 4 (required — lists databases)
+> - **Do NOT run** Cells 3, 5, or 6 — the app creates its own tables automatically on first startup
 
 ---
 
@@ -141,7 +143,22 @@ resources:
             branch: "projects/<your-project>/branches/<your-branch>"
             database: "projects/<your-project>/branches/<your-branch>/databases/<your-db>"
             permission: 'CAN_CONNECT_AND_CREATE'
+        # Genie Space the agent queries for natural-language SQL.
+        # Without this grant the app's SP gets PERMISSION_DENIED on /api/2.0/genie/spaces/<id>.
+        - name: 'genie'
+          genie_space:
+            space_id: '<your-genie-space-id>'
+            permission: 'CAN_RUN'
+        # Vector Search index the agent searches for policy docs.
+        # Without this grant the app's SP gets PERMISSION_DENIED on the index lookup.
+        - name: 'vs_index'
+          uc_securable:
+            securable_full_name: '<your-catalog>.<your-schema>.policy_docs_index'
+            securable_type: 'TABLE'
+            permission: 'SELECT'
 ```
+
+> **Note:** The top-level `sync.exclude` block in `databricks.yml` keeps `.databricks/` (~52 MB Terraform binary) out of the Apps source snapshot. Don't remove it, or `bundle deploy` will fail with `Failed to snapshot source code`.
 
 Also update the workspace `host` in `targets`:
 
@@ -245,3 +262,5 @@ Open the app URL in your browser to use the chat UI.
 | MCP tools not responding | Verify URLs in `agent.py` match resources from data setup. Format: `/api/2.0/mcp/vector-search/catalog/schema/index` |
 | Vector Search returns no results | Index may not be synced — wait 5-10 min after creation |
 | Local app won't start | Check `lsof -ti :8000` — kill orphan processes |
+| `Failed to snapshot source code` / 52 MB file rejected | `.databricks/` got included in the Apps snapshot. Confirm `sync.exclude` block is in `databricks.yml`. If the file was already uploaded, delete it: `databricks workspace delete /Workspace/Users/<you>/databricks-ai-workshops/medium/.databricks --recursive` |
+| `PERMISSION_DENIED: Unable to get space …` (Genie) or on VS index lookup | The app's service principal lacks access. Add the `genie_space` and `uc_securable` resource entries from Step 6a, then redeploy. For an immediate unstick, also grant the SP `CAN RUN` / `SELECT` in the Genie Space and Catalog Explorer UIs |
