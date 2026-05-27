@@ -2,6 +2,8 @@
 
 An AI-powered conversational agent on Databricks that combines real-time data querying, document retrieval, and persistent user memory — deployed as a full-stack Databricks App.
 
+![L300 Architecture](./L300_Architecture.png)
+
 ## Get Started
 
 | Path | Guide |

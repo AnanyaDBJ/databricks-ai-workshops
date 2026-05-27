@@ -19,7 +19,7 @@ Each guide is self-contained — pick one and follow it start to finish.
 | Level | What You'll Build | Duration | Guide |
 |-------|-------------------|----------|-------|
 | **Simple (L100)** | AI agent using managed Databricks services — Genie, Vector Search, Playground. No custom code. | ~2-3 hours | [Lab Guide](./simple/LAB_GUIDE.md) |
-| **Medium (L200)** | Custom agent with OpenAI Agents SDK, MCP tools, Lakebase memory, and chat UI deployed as a Databricks App. | ~3-4 hours | [Local Guide](./medium/lab_instructions/SETUP_GUIDE.md) / [Workspace Guide](./medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md) |
+| **Medium (L200)** | Custom agent with OpenAI Agents SDK, MCP tools, Lakebase memory, and chat UI deployed as a Databricks App. | ~3-4 hours | [Local Guide](./medium/WORKSHOP_INSTRUCTIONS.md) / [Workspace Guide](./medium/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
 | **Advanced (L300)** | Production-grade LangGraph agent with MCP, persistent memory, streaming UI, and evaluation suite. | ~5-6 hours | [Local Guide](./advanced/WORKSHOP_INSTRUCTIONS.md) / [Workspace Guide](./advanced/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
 
 ---
