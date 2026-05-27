@@ -361,6 +361,10 @@ If you want to use the existing template in this repo:
 
 Now that you have traces, let's evaluate agent quality systematically.
 
+![Evaluation-driven development: inner loop (experiment) and outer loop (production)](./evaluation-driven-development.png)
+
+Evaluation-driven development pairs a fast **inner loop** (manual review → systematic eval → fix issues, add cases) with an **outer loop** that curates real-world traces from production back into your dataset. The rest of this section walks you through both loops in MLflow. Learn more in the [MLflow GenAI Eval & Monitor docs](https://mlflow.org/docs/latest/genai/eval-monitor/).
+
 ### 5.1 Observability — Explore Traces
 
 1. Open **Experiments** > your experiment
