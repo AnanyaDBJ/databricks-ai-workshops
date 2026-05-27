@@ -64,12 +64,14 @@ Lakebase is a managed PostgreSQL database inside Databricks. Your app uses it fo
 ### Find your connection details
 
 1. Open the notebook `medium/scripts/lakebase_setup_script.ipynb` in the workspace
-2. In **Cell 3**, replace `<project name>` with the project name you just created
-3. Run **Cell 3** — note the output:
+2. In **Cell 4**, replace `<project name>` with the project name you just created
+3. Run **Cell 4** — note the output:
    - **Branch path**: `projects/my-agent-workshop/branches/production`
    - **Database path**: the full `name` value (e.g., `projects/my-agent-workshop/branches/production/databases/abc123def456`)
 
-> **Important:** Only run Cell 1 (optional) and Cell 3. Do NOT run Cells 2, 4, or 5 — the app creates its own database tables automatically.
+> **Important:** Each cell has a banner saying whether to run it. The default flow is:
+> - **Run** Cell 1 (install, required), Cell 2 (optional — lists branches), and Cell 4 (required — lists databases)
+> - **Do NOT run** Cells 3, 5, or 6 — the app creates its own database tables automatically on first startup
 
 ---
 
@@ -127,8 +129,10 @@ Find-and-replace these values:
 |---|---|---|
 | `"my-agent-app"` | A unique name (e.g., `"agent-workshop-jsmith"`) | Choose your own |
 | `"<your-experiment-id>"` | Your Experiment ID (e.g., `"1234567890123456"`) | Step 4 |
-| `"projects/<your-project>/branches/<branch-name>"` | Your branch path | Step 3 |
-| `"projects/<your-project>/branches/<branch-name>/databases/<your-database-id>"` | Your database path | Step 3 |
+| `"projects/<your-project>/branches/production"` | Your branch path | Step 3 |
+| `"projects/<your-project>/branches/production/databases/<your-database-id>"` | Your database path | Step 3 |
+| `'<your-genie-space-id>'` | Your Genie Space ID | Step 2 |
+| `'<your-catalog>.<your-schema>.policy_docs_index'` | Your VS Index full name (with dots) | Step 2 |
 | `https://<your-workspace>.cloud.databricks.com` | Your workspace URL | Browser address bar |
 
 **Here's what the key sections should look like after edits:**
@@ -149,6 +153,15 @@ resources:
             branch: "projects/my-agent-workshop/branches/production"         # ← from Step 3
             database: "projects/my-agent-workshop/branches/production/databases/abc123"  # ← from Step 3
             permission: 'CAN_CONNECT_AND_CREATE'
+        - name: 'genie'
+          genie_space:
+            space_id: '01abcdef12345678'                # ← from Step 2
+            permission: 'CAN_RUN'
+        - name: 'vs_index'
+          uc_securable:
+            securable_full_name: 'my_catalog.my_schema.policy_docs_index'  # ← from Step 2
+            securable_type: 'TABLE'
+            permission: 'SELECT'
 
 targets:
   dev:
@@ -157,6 +170,8 @@ targets:
     workspace:
       host: https://my-workspace.cloud.databricks.com   # ← your workspace URL
 ```
+
+> **Note:** The top-level `sync.exclude` block in `databricks.yml` keeps `.databricks/` (~52 MB Terraform binary) out of the Apps source snapshot. Don't remove it, or `bundle deploy` will fail with `Failed to snapshot source code`.
 
 ### 5b. Edit `agent_server/agent.py`
 
@@ -248,6 +263,8 @@ If the agent responds with relevant answers, you're done!
 | `An app with the same name already exists` | Name collision | Choose a different name or delete: `databricks apps delete <name>` |
 | `databricks bundle validate` shows errors | Unreplaced placeholder in YAML | Read the error — it points to the exact line |
 | Vector Search returns no results | Index hasn't finished syncing | Wait 5-10 minutes after Step 2 |
+| `Failed to snapshot source code` / 52 MB file rejected | `.databricks/` got included in the Apps source snapshot | The `sync.exclude` block at the top of `databricks.yml` prevents this. If `.databricks/` was already uploaded, delete it from a local terminal: `databricks workspace delete /Workspace/Repos/<you>/databricks-ai-workshops/medium/.databricks --recursive` |
+| `PERMISSION_DENIED: Unable to get space …` (Genie) or PERMISSION_DENIED on VS index | The app's service principal lacks access | Add the `genie_space` and `uc_securable` resource entries shown in Step 5a, then redeploy. For an immediate unstick, also grant the SP `CAN RUN` / `SELECT` in the Genie Space and Catalog Explorer UIs |
 
 ---
 

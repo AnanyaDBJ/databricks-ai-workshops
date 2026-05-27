@@ -319,10 +319,14 @@ If you want to use the existing template in this repo:
 3. Deploy:
    ```bash
    databricks bundle deploy
-   databricks bundle run agent_openai_agents_sdk
+   databricks bundle run agent_openai_sdk
    ```
 
 > **Note:** First deployment takes 3-5 minutes. Subsequent deployments are faster.
+
+> **⚠️ Important: Enable On-Behalf-Of-User (OBO) authorization at deploy time.**
+> In the Databricks Apps UI (or in the deploy dialog if you used "Get Code"), tick **User authorization** / **On behalf of user** before clicking Deploy. With OBO on, the app forwards your user identity to Genie + Vector Search, so calls succeed using *your* permissions.
+> If OBO is **off**, the app runs only as its service principal — and the SP gets `PERMISSION_DENIED` on the Genie Space and VS index until you manually grant it `CAN RUN` on the Genie Space and `SELECT` on the index in Catalog Explorer.
 
 ### 4.3 Test the Agent
 
@@ -356,6 +360,10 @@ If you want to use the existing template in this repo:
 **Time:** ~40 min
 
 Now that you have traces, let's evaluate agent quality systematically.
+
+![Evaluation-driven development: inner loop (experiment) and outer loop (production)](./evaluation-driven-development.png)
+
+Evaluation-driven development pairs a fast **inner loop** (manual review → systematic eval → fix issues, add cases) with an **outer loop** that curates real-world traces from production back into your dataset. The rest of this section walks you through both loops in MLflow. Learn more in the [MLflow GenAI Eval & Monitor docs](https://mlflow.org/docs/latest/genai/eval-monitor/).
 
 ### 5.1 Observability — Explore Traces
 
@@ -563,6 +571,7 @@ Both are production-ready. Choose based on your needs: simple use cases get mana
 | "Get Code" export fails | 3 | Check you have workspace write permissions; see permission dialog |
 | App crashes on startup | 4 | Check logs: `databricks apps logs <app-name>`. Likely service principal permissions |
 | App returns errors | 4 | Verify resource permissions in `databricks.yml` match actual resources |
+| `PERMISSION_DENIED` on Genie Space or VS index after deploy | 4 | Enable **User authorization (OBO)** on the app (Apps UI > Settings) and redeploy — the app will then use your identity for Genie + VS. Alternative: grant the app's SP `CAN RUN` on the Genie Space and `SELECT` on the VS index in Catalog Explorer |
 | No traces in experiment | 5 | Verify `MLFLOW_EXPERIMENT_ID` in app config matches your experiment |
 | Evaluation notebook errors | 5 | Ensure experiment has traces with status `OK` (not failed traces) |
 | Labelling session is empty | 6 | Select traces first, THEN create the session |

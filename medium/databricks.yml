@@ -1,6 +1,21 @@
 bundle:
   name: agent_openai_agents_sdk
 
+# Exclude bundle-local state from the workspace sync AND from the Databricks
+# Apps source snapshot. The Terraform provider binary inside .databricks/
+# is ~52MB and exceeds the Apps per-file size limit, causing
+# "Failed to snapshot source code" errors on `databricks bundle run`.
+sync:
+  exclude:
+    - .databricks
+    - .databricks/**
+    - .venv
+    - .venv/**
+    - node_modules
+    - node_modules/**
+    - "**/__pycache__"
+    - "**/*.pyc"
+
 resources:
   apps:
     agent_openai_agents_sdk:
@@ -42,6 +57,19 @@ resources:
             branch: "projects/<your-project>/branches/production"
             database: "projects/<your-project>/branches/production/databases/<your-database-id>"
             permission: 'CAN_CONNECT_AND_CREATE'
+        # Genie Space the agent queries for natural-language SQL.
+        # Without this grant the app's SP gets PERMISSION_DENIED on /api/2.0/genie/spaces/<id>.
+        - name: 'genie'
+          genie_space:
+            space_id: '<your-genie-space-id>'
+            permission: 'CAN_RUN'
+        # Vector Search index the agent searches for policy docs.
+        # Without this grant the app's SP gets PERMISSION_DENIED on the index lookup.
+        - name: 'vs_index'
+          uc_securable:
+            securable_full_name: '<your-catalog>.<your-schema>.policy_docs_index'
+            securable_type: 'TABLE'
+            permission: 'SELECT'
 
 targets:
   dev:
