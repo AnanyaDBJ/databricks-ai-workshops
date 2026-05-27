@@ -128,7 +128,8 @@ You now have everything ready. Go to your workshop level:
 | Level | Next step |
 |-------|-----------|
 | Simple (L100) | [`simple/LAB_GUIDE.md`](../simple/LAB_GUIDE.md) |
-| Medium (L200) | [`medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md`](../medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md) |
+| Medium (L200) — Local | [`medium/lab_instructions/SETUP_GUIDE.md`](../medium/lab_instructions/SETUP_GUIDE.md) |
+| Medium (L200) — Workspace | [`medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md`](../medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md) |
 | Advanced (L300) — Local | [`advanced/WORKSHOP_INSTRUCTIONS.md`](../advanced/WORKSHOP_INSTRUCTIONS.md) |
 | Advanced (L300) — Workspace | [`advanced/WORKSHOP_INSTRUCTIONS_WORKSPACE.md`](../advanced/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
 
@@ -179,7 +180,7 @@ You now have everything ready. Go to your workshop level:
 | Level | Next step |
 |-------|-----------|
 | Simple (L100) | [`simple/LAB_GUIDE.md`](../simple/LAB_GUIDE.md) |
-| Medium (L200) | [`medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md`](../medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md) |
+| Medium (L200) — Workspace | [`medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md`](../medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md) |
 | Advanced (L300) — Workspace | [`advanced/WORKSHOP_INSTRUCTIONS_WORKSPACE.md`](../advanced/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
 
 ---
