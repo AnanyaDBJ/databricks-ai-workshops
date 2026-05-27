@@ -34,26 +34,11 @@ Once imported, your code will be at a path like:
 
 ---
 
-## Step 2: Run the Data Setup Notebook
+## Step 2: Set Up Your Data
 
-You must create your dataset before proceeding. This notebook (from the [`data/`](../data/README.md) folder) creates the data and AI tools that your agent will use.
+Complete **Path B (Workspace Notebook)** from [`data/README.md`](../data/README.md#path-b-workspace-notebook).
 
-1. In the workspace file browser, navigate to `data/workspace_setup_script/01_quickstart_setup.py`
-2. Click it to open as a notebook
-3. At the top, you'll see two dropdown **widgets** — select your **catalog** and **schema**
-4. Click **Run All** (takes ~10-15 minutes — most of the wait is Vector Search provisioning)
-
-**What this creates for you:**
-
-| Resource | What it does |
-|----------|--------------|
-| 6 data tables | Sample retail data (customers, products, stores, transactions, etc.) |
-| policy_docs_chunked | Policy documents split into searchable chunks |
-| Vector Search index | Enables the agent to search documents by meaning |
-| Genie Space | Lets the agent answer data questions using natural language > SQL |
-| MLflow Experiment | A place to log and monitor your agent's behavior |
-
-**Copy these 4 values from the notebook output — you'll need them in Step 5:**
+When done, save these 4 values from the notebook output — you'll need them in Step 5:
 
 | What to copy | Looks like | You'll use it in |
 |------|---------|---------|

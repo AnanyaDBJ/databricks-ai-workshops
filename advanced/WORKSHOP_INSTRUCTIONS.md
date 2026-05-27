@@ -13,15 +13,15 @@ Build and deploy a conversational AI agent with Genie, Vector Search, and long-t
 
 Your workspace needs: Serverless compute, Foundation Model API (Claude), Unity Catalog, Vector Search, and Lakebase.
 
-## Placeholders
+### Data setup (required first)
 
-Replace these throughout the workshop:
+Complete the data setup before continuing:
+**→ [`data/README.md`](../data/README.md) — Path A (Local CLI)**
 
-| Placeholder | Example |
-|-------------|---------|
-| `<CATALOG>` | `my_catalog` |
-| `<SCHEMA>` | `retail_agent` |
-| `<WAREHOUSE-ID>` | from `databricks warehouses list` |
+When done, you should have these values saved:
+- **Catalog.Schema** (e.g., `my_catalog.retail_agent`)
+- **Vector Search Index** (e.g., `my_catalog.retail_agent.policy_docs_index`)
+- **Genie Space ID** (e.g., `01ef...abcd`)
 
 ---
 
@@ -29,7 +29,7 @@ Replace these throughout the workshop:
 
 ```bash
 git clone https://github.com/AnanyaDBJ/databricks-ai-workshops.git
-cd databricks-ai-workshops
+cd databricks-ai-workshops/advanced
 ```
 
 ---
@@ -37,7 +37,6 @@ cd databricks-ai-workshops
 ## Step 2: Run Quickstart
 
 ```bash
-cd advanced
 uv run quickstart
 ```
 
@@ -51,100 +50,20 @@ Follow the prompts. When done, your `.env` will have Lakebase and MLflow configu
 
 ---
 
-## Steps 3–6: Data Setup
+## Step 3: Update `.env` with Resource IDs
 
-These steps create the dataset your agent depends on. For full details on each script, see [`data/README.md`](../data/README.md).
-
----
-
-## Step 3: Create Catalog and Schema
-
-Run in the Databricks SQL Editor or via CLI:
-
-```sql
-CREATE CATALOG IF NOT EXISTS <CATALOG>;
-CREATE SCHEMA IF NOT EXISTS <CATALOG>.<SCHEMA>;
-```
-
----
-
-## Step 4: Generate Structured Data
+Add the values from your data setup to `.env`:
 
 ```bash
-cd ../data/local_cli_setup_script
-
-python execute_sql.py \
-  --profile DEFAULT \
-  --warehouse-id <WAREHOUSE-ID> \
-  --catalog <CATALOG> \
-  --schema <SCHEMA>
+GENIE_SPACE_ID=<your-genie-space-id>
+VECTOR_SEARCH_INDEX=<your-catalog>.<your-schema>.policy_docs_index
 ```
 
-This creates 6 tables: customers, products, stores, transactions, transaction_items, payment_history.
+Your `.env` should now have all required values (from quickstart + data setup).
 
 ---
 
-## Step 5: Generate Policy Document Chunks
-
-```bash
-python execute_chunking.py \
-  --profile DEFAULT \
-  --warehouse-id <WAREHOUSE-ID> \
-  --catalog <CATALOG> \
-  --schema <SCHEMA>
-```
-
-This chunks 7 policy docs and writes to the `policy_docs_chunked` table.
-
----
-
-## Step 6: Create Vector Search + Genie Space
-
-```bash
-python create_resources.py \
-  --profile DEFAULT \
-  --warehouse-id <WAREHOUSE-ID> \
-  --catalog <CATALOG> \
-  --schema <SCHEMA>
-```
-
-This script automatically:
-- Creates a Vector Search endpoint (waits until ONLINE, ~5-10 min)
-- Enables Change Data Feed on the chunked table
-- Creates a Delta Sync Vector Search index
-- Creates a Genie Space with all 6 retail tables
-
-At the end, it prints:
-```
-=== Resources Created ===
-Vector Search Index:    <CATALOG>.<SCHEMA>.policy_docs_index
-Genie Space ID:         01ef...abcd
-
-Add these to your advanced/.env file:
-  VECTOR_SEARCH_INDEX=<CATALOG>/<SCHEMA>/policy_docs_index
-  GENIE_SPACE_ID=01ef...abcd
-```
-
----
-
-## Step 7: Update `.env` with Resource IDs
-
-```bash
-cd ../../advanced
-```
-
-Add the two values printed by `create_resources.py` to your `.env`:
-
-```bash
-GENIE_SPACE_ID=<GENIE-SPACE-ID>
-VECTOR_SEARCH_INDEX=<CATALOG>.<SCHEMA>.policy_docs_index
-```
-
-Your `.env` should now have all required values (from quickstart + create_resources).
-
----
-
-## Step 8: Run Locally
+## Step 4: Run Locally
 
 ```bash
 uv run start-app
@@ -162,9 +81,9 @@ Verify traces in **Experiments > your experiment** in the Databricks UI.
 
 ---
 
-## Step 9: Deploy to Databricks Apps
+## Step 5: Deploy to Databricks Apps
 
-### 9a. Update `databricks.yml`
+### 5a. Update `databricks.yml`
 
 Edit the `resources` section in `advanced/databricks.yml` with your actual values:
 
@@ -205,7 +124,7 @@ databricks api get /api/2.0/postgres/projects/<PROJECT-NAME>/branches/<BRANCH-NA
   | jq -r '.databases[0].name'
 ```
 
-### 9b. Validate and Deploy
+### 5b. Validate and Deploy
 
 ```bash
 # Validate the bundle config
@@ -229,7 +148,7 @@ databricks apps deploy retail-grocery-ltm-memory \
 
 ---
 
-## Step 10: Grant App Service Principal Permissions
+## Step 6: Grant App Service Principal Permissions
 
 ```bash
 # Get the app's service principal
@@ -258,12 +177,9 @@ GRANT SELECT ON SCHEMA <CATALOG>.<SCHEMA> TO `<SP_CLIENT_ID>`;
 
 ---
 
-## Step 11: Start and Verify the Deployed App
+## Step 7: Verify the Deployed App
 
 ```bash
-# Start the app
-databricks apps start retail-grocery-ltm-memory
-
 # Get the URL
 APP_URL=$(databricks apps get retail-grocery-ltm-memory --output json | jq -r '.url')
 echo "App URL: $APP_URL"
@@ -284,12 +200,11 @@ Open the app URL in your browser to use the chat UI.
 
 | Issue | Fix |
 |-------|-----|
-| `JSONDecodeError` in setup scripts | Auth expired — run `databricks auth login --profile DEFAULT` |
+| `JSONDecodeError` in quickstart | Auth expired — run `databricks auth login --profile DEFAULT` |
 | `unhandled errors in a TaskGroup` | GENIE_SPACE_ID or VECTOR_SEARCH_INDEX is empty/invalid in `.env` |
 | `UniqueViolation` on first run | Safe to ignore — handled automatically on retry |
 | App stuck in `STOPPED` | `databricks apps start retail-grocery-ltm-memory` |
-| Lakebase permission denied | Re-run Step 10 (deployed) or verify CLI auth is valid (local) |
+| Lakebase permission denied | Re-run Step 6 (deployed) or verify CLI auth is valid (local) |
 | Vector Search returns empty | Wait for index sync to complete — check status in Catalog Explorer |
 | Local app won't start | Check `lsof -ti :8000` — kill orphan processes |
-| `create_resources.py` times out | VS endpoint can take 10+ min — re-run, it's idempotent |
 | View deployed app logs | `databricks apps get-logs retail-grocery-ltm-memory` or **Apps > Logs** in UI |
