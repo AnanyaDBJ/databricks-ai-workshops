@@ -49,7 +49,7 @@ VERTICAL = WorkshopVertical(
     genie_title=_genie_title,
     genie_description=(
         "Explore Meridian Capital Partners clients, accounts, portfolio holdings, "
-        "and market prices (dailyprice, company_profile views in this schema)."
+        "dailyprice, and company_profile in this schema."
     ),
     vs_endpoint_prefix=_vs_prefix,
     mlflow_experiment_suffix="meridian-agent-workshop",

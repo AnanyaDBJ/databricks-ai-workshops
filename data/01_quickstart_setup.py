@@ -24,15 +24,11 @@
 # MAGIC |----------|--------|-------------|
 # MAGIC | `education` | 6 tables (students, courses, campuses, …) | EduPath Academy |
 # MAGIC | `retail` | 6 tables (customers, products, stores, …) | FreshMart (`verticals/retail/docs/`) |
-# MAGIC | `financial_services` | 5 tables in `{catalog}.{schema}` (3 generated + 2 market-data views) | Meridian Capital Partners |
+# MAGIC | `financial_services` | 5 tables in `{catalog}.{schema}` | Meridian Capital Partners |
 # MAGIC
-# MAGIC ### Financial services: Marketplace + workshop catalog
+# MAGIC ### Financial services: Marketplace + workshop schema
 # MAGIC
-# MAGIC For `financial_services`, **1st party** data (clients, accounts, portfolio holdings) is generated in your workshop schema. **3rd party** market data comes from the [Sample Market Data - Daily Price Data](https://e2-demo-field-eng.cloud.databricks.com/marketplace/consumer/listings/0f7c65e3-875a-40e2-bd58-5c8bcadbdc2b) Delta Share (read-only; not copied).
-# MAGIC
-# MAGIC 1. Install the Marketplace listing and name the catalog **exactly the same** as the **Catalog** widget below.
-# MAGIC 2. Share tables: `{catalog}.market_data.dailyprice`, `{catalog}.market_data.company_profile`.
-# MAGIC 3. Workshop schema `{catalog}.{schema}`: generated `clients`, `accounts`, `portfolio_holdings` plus views `dailyprice`, `company_profile` → `{catalog}.market_data.*`.
+# MAGIC All tables land in `{catalog}.{schema}` (Catalog + Schema widgets). Install the [Sample Market Data - Daily Price Data](https://e2-demo-field-eng.cloud.databricks.com/marketplace/consumer/listings/0f7c65e3-875a-40e2-bd58-5c8bcadbdc2b) listing into the **Catalog** widget name (creates read-only `{catalog}.market_data.*`). Setup snapshots `dailyprice` and `company_profile` into your **Schema** widget — do not use `market_data` as the workshop schema.
 
 # COMMAND ----------
 
@@ -73,8 +69,13 @@ FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
 print(f"Industry: {INDUSTRY}")
 print(f"Workshop tables: {FULL_SCHEMA}")
 if INDUSTRY == "financial_services":
-    print(f"Market data source (Delta Share): {CATALOG}.market_data.dailyprice")
-    print("Ensure the Marketplace listing is installed into this catalog name.")
+    if SCHEMA.lower() == "market_data":
+        raise ValueError(
+            "Schema widget must be your workshop schema (e.g. meridian_demo), not 'market_data'. "
+            "Market data is snapshotted into {catalog}.{schema} at setup."
+        )
+    print(f"Market data install (read-only): {CATALOG}.market_data — snapshotted into {FULL_SCHEMA}")
+    print("Ensure the Marketplace listing is installed into the Catalog widget name.")
 
 # COMMAND ----------
 

@@ -1,9 +1,7 @@
 """Meridian Capital Partners — financial services tables for workshop demo.
 
-Paths match 01_quickstart_setup.py widgets (Catalog + Schema):
-  - 1st party (writable): {catalog}.{schema}.clients, accounts, portfolio_holdings
-  - 3rd party (read-only source): {catalog}.market_data.dailyprice, company_profile
-  - 3rd party (Genie/SQL in workshop schema): views at {catalog}.{schema}.dailyprice, company_profile
+All workshop tables are written to {catalog}.{schema} from 01_quickstart_setup.py widgets.
+The generator never writes to the provider's market_data schema.
 """
 
 import json
@@ -14,14 +12,14 @@ from lib.demo_names import CITIES_STATES, FIRST_NAMES, LAST_NAMES
 
 # Databricks Marketplace: Sample Market Data - Daily Price Data (Delta Sharing)
 # https://e2-demo-field-eng.cloud.databricks.com/marketplace/consumer/listings/0f7c65e3-875a-40e2-bd58-5c8bcadbdc2b
-# Install the listing into the same catalog as the setup notebook Catalog widget.
-MARKET_DATA_SCHEMA = "market_data"
+# Install into the Catalog widget; read once from {catalog}.market_data, land in {catalog}.{schema}.
+SHARE_SCHEMA = "market_data"
 DAILY_PRICE_TABLE = "dailyprice"
 COMPANY_PROFILE_TABLE = "company_profile"
 
 FIRST_PARTY_TABLES = ["clients", "accounts", "portfolio_holdings"]
-MARKET_DATA_VIEW_TABLES = [DAILY_PRICE_TABLE, COMPANY_PROFILE_TABLE]
-TABLES = FIRST_PARTY_TABLES + MARKET_DATA_VIEW_TABLES
+MARKET_DATA_TABLES = [DAILY_PRICE_TABLE, COMPANY_PROFILE_TABLE]
+TABLES = FIRST_PARTY_TABLES + MARKET_DATA_TABLES
 
 
 def _phone():
@@ -33,51 +31,39 @@ def _email(first, last):
     return f"{first.lower()}.{last.lower()}@{domain}"
 
 
-def _save(spark, catalog: str, schema: str, table, rows):
-    fqn = f"{catalog}.{schema}.{table}"
-    spark.createDataFrame(rows).write.mode("overwrite").saveAsTable(fqn)
-    print(f"Created {fqn} — {len(rows)} rows")
+def _fqn(catalog: str, schema: str, table: str) -> str:
+    return f"{catalog}.{schema}.{table}"
 
 
-def _market_data_fqn(catalog: str, table: str) -> str:
-    return f"`{catalog}`.`{MARKET_DATA_SCHEMA}`.`{table}`"
+def _share_fqn(catalog: str, table: str) -> str:
+    return f"`{catalog}`.`{SHARE_SCHEMA}`.`{table}`"
 
 
-def _resolve_locations(
+def _resolve_catalog_schema(
     full_schema: str,
     catalog: str | None,
     schema: str | None,
-    market_data_catalog: str | None,
-) -> tuple[str, str, str]:
-    """Align with notebook: CATALOG, SCHEMA, and market data at CATALOG.market_data."""
+) -> tuple[str, str]:
     if catalog and schema:
-        workshop_catalog, workshop_schema = catalog, schema
-    else:
-        parts = full_schema.split(".", 1)
-        if len(parts) != 2 or not parts[0] or not parts[1]:
-            raise ValueError(f"full_schema must be catalog.schema, got '{full_schema}'")
-        workshop_catalog, workshop_schema = parts
-
-    share_catalog = market_data_catalog or workshop_catalog
-    return workshop_catalog, workshop_schema, share_catalog
+        return catalog, schema
+    parts = full_schema.split(".", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError(f"full_schema must be catalog.schema, got '{full_schema}'")
+    return parts[0], parts[1]
 
 
-def _verify_market_data(spark, share_catalog: str) -> None:
-    daily = _market_data_fqn(share_catalog, DAILY_PRICE_TABLE)
-    count = spark.sql(f"SELECT COUNT(*) AS n FROM {daily}").collect()[0]["n"]
-    if count == 0:
-        raise ValueError(
-            f"No rows in {share_catalog}.{MARKET_DATA_SCHEMA}.{DAILY_PRICE_TABLE}. "
-            "Install the Marketplace listing into the Catalog widget name."
-        )
-    print(
-        f"Market data source: {share_catalog}.{MARKET_DATA_SCHEMA} "
-        f"({count:,} daily price rows — not copied, exposed via views in workshop schema)"
-    )
+def _materialize_market_data_tables(spark, catalog: str, schema: str, share_catalog: str) -> None:
+    """Snapshot share tables into the workshop schema (never write to market_data)."""
+    for table in MARKET_DATA_TABLES:
+        source = _share_fqn(share_catalog, table)
+        target = _fqn(catalog, schema, table)
+        spark.sql(f"CREATE OR REPLACE TABLE {target} AS SELECT * FROM {source}")
+        count = spark.table(target).count()
+        print(f"Created {target} — {count:,} rows (snapshot from Delta Share)")
 
 
-def _symbols_from_market_data(spark, share_catalog: str, limit: int = 400) -> list[str]:
-    daily = _market_data_fqn(share_catalog, DAILY_PRICE_TABLE)
+def _symbols_from_workshop_schema(spark, catalog: str, schema: str, limit: int = 400) -> list[str]:
+    daily = _fqn(catalog, schema, DAILY_PRICE_TABLE)
     rows = spark.sql(
         f"""
         SELECT ticker
@@ -93,19 +79,16 @@ def _symbols_from_market_data(spark, share_catalog: str, limit: int = 400) -> li
     symbols = [r["ticker"] for r in rows]
     if not symbols:
         raise ValueError(
-            f"No tickers in {share_catalog}.{MARKET_DATA_SCHEMA}.{DAILY_PRICE_TABLE}. "
-            "Install the Marketplace listing into the Catalog widget name."
+            f"No tickers in {daily}. "
+            "Install the Marketplace listing into the Catalog widget, then re-run setup."
         )
     return symbols
 
 
-def _create_market_data_views(spark, workshop_catalog: str, workshop_schema: str, share_catalog: str) -> None:
-    """Views in {catalog}.{schema} pointing at {catalog}.market_data.* (no data copy)."""
-    for table in MARKET_DATA_VIEW_TABLES:
-        source = _market_data_fqn(share_catalog, table)
-        target = f"{workshop_catalog}.{workshop_schema}.{table}"
-        spark.sql(f"CREATE OR REPLACE VIEW {target} AS SELECT * FROM {source}")
-        print(f"Created view {target} -> {share_catalog}.{MARKET_DATA_SCHEMA}.{table}")
+def _save(spark, catalog: str, schema: str, table, rows):
+    fqn = _fqn(catalog, schema, table)
+    spark.createDataFrame(rows).write.mode("overwrite").saveAsTable(fqn)
+    print(f"Created {fqn} — {len(rows)} rows")
 
 
 def generate(
@@ -116,13 +99,13 @@ def generate(
     schema: str | None = None,
     market_data_catalog: str | None = None,
 ) -> list[str]:
-    workshop_catalog, workshop_schema, share_catalog = _resolve_locations(
-        full_schema, catalog, schema, market_data_catalog
-    )
+    catalog, schema = _resolve_catalog_schema(full_schema, catalog, schema)
+    share_catalog = market_data_catalog or catalog
     random.seed(seed)
 
-    _verify_market_data(spark, share_catalog)
-    symbols = _symbols_from_market_data(spark, share_catalog)
+    # Land 3rd-party market data in the target schema first (read share, write workshop schema only).
+    _materialize_market_data_tables(spark, catalog, schema, share_catalog)
+    symbols = _symbols_from_workshop_schema(spark, catalog, schema)
     as_of_date = datetime.utcnow().strftime("%Y-%m-%d")
 
     clients = []
@@ -146,7 +129,7 @@ def generate(
                 "esg_screen": random.choice([True, False]),
             }),
         })
-    _save(spark, workshop_catalog, workshop_schema, "clients", clients)
+    _save(spark, catalog, schema, "clients", clients)
 
     accounts = []
     for acc_id in range(1, 201):
@@ -159,7 +142,7 @@ def generate(
             "open_date": (datetime(2019, 1, 1) + timedelta(days=random.randint(0, 1800))).strftime("%Y-%m-%d"),
             "cash_balance_usd": round(random.uniform(5_000, 500_000), 2),
         })
-    _save(spark, workshop_catalog, workshop_schema, "accounts", accounts)
+    _save(spark, catalog, schema, "accounts", accounts)
 
     holdings = []
     holding_id = 1
@@ -179,13 +162,12 @@ def generate(
                 "as_of_date": as_of_date,
             })
             holding_id += 1
-    _save(spark, workshop_catalog, workshop_schema, "portfolio_holdings", holdings)
+    _save(spark, catalog, schema, "portfolio_holdings", holdings)
 
-    _create_market_data_views(spark, workshop_catalog, workshop_schema, share_catalog)
-
-    ws = f"{workshop_catalog}.{workshop_schema}"
+    ws = f"{catalog}.{schema}"
     print(
-        f"Example join (all tables in workshop schema {ws}):\n"
+        f"All tables in {ws}: {', '.join(TABLES)}\n"
+        f"Example join:\n"
         f"  SELECT h.*, d.close, c.industry\n"
         f"  FROM {ws}.portfolio_holdings h\n"
         f"  JOIN {ws}.company_profile c ON h.symbol = c.ticker\n"
