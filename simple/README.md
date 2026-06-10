@@ -1,6 +1,6 @@
 # L100: Build Your First AI Agent on Databricks
 
-Create a conversational AI assistant for a fictional grocery chain called **FreshMart** — using only managed Databricks services, no coding required after setup.
+Create a conversational AI assistant for a fictional company in your chosen industry — **FreshMart** (retail), **EduPath Academy** (education), or **Meridian Capital Partners** (financial services) — using only managed Databricks services, no coding required after setup.
 
 ---
 

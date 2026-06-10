@@ -8,7 +8,7 @@ A complete, step-by-step guide to building, deploying, evaluating, and improving
 
 In this workshop you will:
 
-1. Set up synthetic retail data and AI resources in a Databricks workspace
+1. Set up synthetic data and AI resources for your chosen industry (retail, education, or financial services) in a Databricks workspace
 2. Explore AI Gateway for LLM governance
 3. Use Genie, Vector Search, and the Playground to prototype an agent
 4. Deploy a production agent app with a chat UI
@@ -30,6 +30,16 @@ In this workshop you will:
 | 8 | Document Intelligence (Optional) | 15 min | 10 min |
 
 For a summary of what this workshop builds, see the [README](./README.md).
+
+**Pick an industry.** The workshop runs on synthetic data for one of three industry verticals — choose the one closest to your audience and use it throughout:
+
+| Industry | Fictional company | Structured data | Documents |
+|----------|------------------|-----------------|-----------|
+| `retail` | FreshMart (grocery chain) | Customers, products, stores, transactions | Store policies (returns, loyalty, delivery) |
+| `education` | EduPath Academy (higher education) | Students, courses, campuses, enrollments | Academic policies (grading, attendance, refunds) |
+| `financial_services` | Meridian Capital Partners (investment firm) | Clients, accounts, holdings, daily prices | Market-shock news articles (AAPL, TSLA) |
+
+The walkthrough below is industry-neutral. Wherever it says to ask the agent questions or set a system prompt, use your industry's versions from **[Appendix A](#appendix-a-per-industry-content)**.
 
 ---
 
@@ -82,9 +92,12 @@ You should now see the full folder structure including `simple/`, `medium/`, `ad
 1. Navigate to `data/01_quickstart_setup.py`
 2. Attach the notebook to **Serverless** compute (or any existing cluster)
 3. Fill in the widgets at the top:
+   - **Industry:** Pick your vertical — `retail`, `education`, or `financial_services`
    - **Catalog Name:** Your Unity Catalog (e.g., `ai_workshop_catalog`)
-   - **Schema Name:** Leave as default `retail_grocery` or choose your own
+   - **Schema Name:** Choose a schema name (e.g., your name or team)
 4. Click **Run All**
+
+> **Sharing a workspace?** Retail and education create tables with the same names, so each attendee (or each industry) needs its **own schema** in the catalog.
 
 > **Note:** The notebook takes 10-15 minutes to complete. Most of the time is spent provisioning the Vector Search endpoint.
 
@@ -92,17 +105,17 @@ You should now see the full folder structure including `simple/`, `medium/`, `ad
 
 ### 1.3 What Gets Created
 
-When the notebook finishes, you'll have:
+When the notebook finishes, you'll have (names depend on your industry):
 
-| Resource | Details |
-|----------|---------|
-| 6 structured tables | customers, products, stores, transactions, transaction_items, payment_history |
-| 1 chunked docs table | policy_docs_chunked (~50 rows from 7 policy documents) |
-| Vector Search endpoint | `freshmart-vs-<schema>` |
-| Vector Search index | `<catalog>.<schema>.policy_docs_index` |
-| Genie Space | `FreshMart Retail Data (<schema>)` |
-| MLflow Experiment | `/Users/<you>/freshmart-agent-workshop` (with artifact storage as Databricks Volume) |
-| UC Function | A utility function for the agent |
+| Resource | `retail` | `education` | `financial_services` |
+|----------|----------|-------------|----------------------|
+| Structured tables | customers, products, stores, transactions, transaction_items, payment_history | (same table names, education semantics) | clients, accounts, portfolio_holdings, dailyprice, company_profile |
+| Chunked docs table | `policy_docs_chunked` | `policy_docs_chunked` | `market_news_chunked` |
+| Vector Search endpoint | `retail-vs-<schema>` | `education-vs-<schema>` | `fsi-vs-<schema>` |
+| Vector Search index | `<catalog>.<schema>.policy_docs_index` | `<catalog>.<schema>.policy_docs_index` | `<catalog>.<schema>.market_news_index` |
+| Genie Space | `FreshMart_Retail_Data_(<schema>)` | `EduPath_Academy_Data_(<schema>)` | `Financial_Services_Data_(<schema>)` |
+| MLflow Experiment | `/Users/<you>/freshmart-agent-workshop` | `/Users/<you>/edupath-agent-workshop` | `/Users/<you>/meridian-agent-workshop` |
+| UC Function | — | `student_forecast` | `weekly_close_spread` |
 
 **Important:** Copy the output summary from the notebook. You'll need these values:
 - **MLflow Experiment ID**
@@ -113,9 +126,9 @@ When the notebook finishes, you'll have:
 
 Before moving on, confirm:
 
-- [ ] **Catalog Explorer:** Navigate to your catalog > schema — you should see 7 tables
+- [ ] **Catalog Explorer:** Navigate to your catalog > schema — you should see the tables for your industry (plus the chunked docs table)
 - [ ] **Vector Search:** Under **Compute** > **Vector Search Endpoints**, your endpoint should be ONLINE (or still provisioning — give it a few more minutes)
-- [ ] **Genie:** Click **Genie** in the left sidebar — you should see "FreshMart Retail Data"
+- [ ] **Genie:** Click **Genie** in the left sidebar — you should see your industry's Genie space (e.g., "EduPath_Academy_Data_(<schema>)")
 - [ ] **Experiments:** Click **Experiments** in the left sidebar — you should see your experiment
 
 ---
@@ -164,17 +177,8 @@ Now you'll explore the individual AI capabilities before combining them into an 
 Genie converts natural language questions into SQL queries and returns results from your data.
 
 1. Click **Genie** in the left sidebar
-2. Open **FreshMart Retail Data** (the space created in Section 1)
-3. Try these questions:
-
-| Question | What It Does |
-|----------|-------------|
-| "How many customers do we have?" | Simple count query |
-| "What are the top 10 products by price?" | Sort and limit |
-| "Show me revenue by store for the last 6 months" | Multi-table join with aggregation |
-| "Which membership tier spends the most on average?" | Group by with calculation |
-| "What payment methods are most popular?" | Aggregation on payment_history |
-| "List all organic products in the Produce category" | Filter with text matching |
+2. Open your industry's Genie space (created in Section 1)
+3. Try the **Genie questions for your industry from [Appendix A](#appendix-a-per-industry-content)**. Start with a simple count (e.g., "How many customers do we have?"), then work up to questions needing joins and aggregations.
 
 **What to observe:**
 - Genie shows the **SQL it generated** — click to inspect
@@ -187,18 +191,9 @@ Genie converts natural language questions into SQL queries and returns results f
 Vector Search finds relevant documents by meaning, not just keywords.
 
 1. Open **Catalog** in the left sidebar
-2. Navigate to your catalog > schema > `policy_docs_index`
+2. Navigate to your catalog > schema > your industry's index (`policy_docs_index`, or `market_news_index` for financial services)
 3. Click **Query** on the index page
-4. Try these searches:
-
-| Query | Expected Source Document |
-|-------|------------------------|
-| "Can I return perishable items?" | return_refund_policy |
-| "How do I earn loyalty points?" | membership_loyalty_program |
-| "What are your delivery hours?" | delivery_pickup_procedures |
-| "Do you accept EBT payments?" | store_operating_procedures |
-| "How do you handle product recalls?" | product_safety_recalls |
-| "What data do you collect about me?" | privacy_policy |
+4. Try the **Vector Search queries for your industry from [Appendix A](#appendix-a-per-industry-content)** — each lists the source document it should retrieve
 
 **What to observe:**
 - Results include a **similarity score** (closer to 1.0 = better match)
@@ -212,33 +207,14 @@ This is where everything comes together.
 1. Open **Playground** in the left sidebar (under Machine Learning)
 2. Select a Foundation Model (e.g., **Claude Sonnet 4** or **Llama 3.3 70B**)
 3. Click **Add Tool** and add:
-   - Your **Genie Space** (`FreshMart Retail Data`)
-   - Your **Vector Search Index** (`policy_docs_index`)
+   - Your **Genie Space** (from Section 1)
+   - Your **Vector Search Index** (`policy_docs_index`, or `market_news_index` for financial services)
    - Your **UC Function** (if created in setup)
-4. Add a system prompt:
-
-```
-You are FreshMart Assistant, a friendly and knowledgeable retail agent for FreshMart grocery stores. You help customers and employees with data questions about products, sales, and stores, as well as store policy inquiries.
-
-Guidelines:
-- Be conversational and helpful
-- Ground all answers in retrieved data — never fabricate information
-- Cite your sources (which tool provided the data)
-- For data questions, use Genie to query the database
-- For policy questions, use Vector Search to find relevant documents
-- Be concise but thorough
-```
-
-5. Test these conversations:
-
-**Data question (uses Genie):**
-> "What are the top 5 products by revenue?"
-
-**Policy question (uses Vector Search):**
-> "What is the return policy for perishable items?"
-
-**Multi-tool question (uses both):**
-> "I bought frozen fish yesterday and it was bad. Can I return it? How much revenue are we losing to returns?"
+4. Add the **Playground system prompt for your industry from [Appendix A](#appendix-a-per-industry-content)**
+5. Test one of each (exact questions in Appendix A):
+   - A **data question** (should use Genie)
+   - A **document question** (should use Vector Search)
+   - A **multi-tool question** (should use both)
 
 **What to observe:**
 - The agent **automatically decides** which tool to use based on the question
@@ -316,7 +292,13 @@ If you want to use the existing template in this repo:
    ```bash
    cd /Workspace/Users/<your-email>/databricks-ai-workshops/simple/L100-agent-openai-sdk
    ```
-3. Deploy:
+3. Configure the agent for your industry and workspace:
+   ```bash
+   uv run quickstart
+   ```
+   When prompted, pick your **industry** and enter the **catalog** and **schema** from Section 1. This writes your industry's system prompt and tool URLs into `agent_server/agent.py` and the Genie space grant into `databricks.yml`.
+4. **Open `agent_server/agent.py` and read the generated block** — this is the heart of the workshop: one file containing the agent's name, system prompt, model, and MCP tool connections. Everything quickstart wrote is plain literal code you can edit.
+5. Deploy:
    ```bash
    databricks bundle deploy
    databricks bundle run agent_openai_agents_sdk
@@ -328,22 +310,13 @@ If you want to use the existing template in this repo:
 
 1. Once the app is running, open its URL (shown in Databricks Apps UI or in the deploy output)
 2. The chat UI opens in your browser
-3. Test with these questions:
-
-| Question | Expected Tool |
-|----------|--------------|
-| "What are the top 5 products by revenue?" | Genie |
-| "What is the return policy for perishable items?" | Vector Search |
-| "Which stores have the highest ratings?" | Genie |
-| "How do I cancel my loyalty membership?" | Vector Search |
-| "Compare our top-selling categories and check if we have return policies for each" | Both |
-
+3. Test with the **sample questions for your industry from [Appendix A](#appendix-a-per-industry-content)** — mix Genie questions, document questions, and multi-tool questions
 4. Ask **5-10 questions** to generate enough traces for evaluation
 
 ### 4.4 Verify Traces Are Captured
 
 1. Go to **Experiments** in the left sidebar
-2. Open your experiment (`freshmart-agent-workshop`)
+2. Open your experiment (e.g., `edupath-agent-workshop` — see Section 1.3 for your industry's name)
 3. You should see new traces — one per conversation turn
 4. Click on a trace to see the full execution graph
 
@@ -491,17 +464,11 @@ A Knowledge Assistant is a RAG agent that answers questions from your documents 
 1. Navigate to **Machine Learning** > **Agents** (or **Agent Builder**)
 2. Click **Create** > **Knowledge Assistant**
 3. Configure:
-   - **Name:** "FreshMart Policy Assistant"
-   - **Knowledge Source:** Select your Vector Search index (`policy_docs_index`)
+   - **Name:** e.g. "FreshMart Policy Assistant", "EduPath Policy Assistant", or "Meridian News Assistant"
+   - **Knowledge Source:** Select your Vector Search index (`policy_docs_index`, or `market_news_index` for financial services)
    - Optionally: point to the raw documents volume for richer rendering
 4. Click **Create**
-5. Test it:
-
-| Question | Expected Behavior |
-|----------|------------------|
-| "What's the loyalty program about?" | Retrieves membership_loyalty_program doc |
-| "How long do I have to return an item?" | Retrieves return_refund_policy doc |
-| "What are your privacy practices?" | Retrieves privacy_policy doc |
+5. Test it with 2-3 of the **document questions for your industry from [Appendix A](#appendix-a-per-industry-content)** and check that the expected source document is retrieved
 
 **What to notice:** This achieves the same thing as your Vector Search tool in the custom agent — but with zero code and a managed hosting model.
 
@@ -511,17 +478,11 @@ A Supervisor Agent orchestrates multiple tools/agents, routing questions to the 
 
 1. Create a **Supervisor Agent**
 2. Add these tools:
-   - **Genie MCP** — your FreshMart Retail Data space
-   - **Vector Search MCP** — your policy_docs_index
+   - **Genie MCP** — your industry's Genie space
+   - **Vector Search MCP** — your industry's index
    - **UC Function MCP** — if available
 3. Add a description and instructions
-4. Test with multi-tool questions:
-
-| Question | Expected Routing |
-|----------|-----------------|
-| "What were last month's sales?" | → Genie |
-| "What's the return policy?" | → Vector Search |
-| "Top products and their return policies" | → Both |
+4. Test with the **multi-tool questions for your industry from [Appendix A](#appendix-a-per-industry-content)** and watch which tool each question routes to
 
 ### 7.3 Comparing Approaches
 
@@ -553,6 +514,9 @@ Both are production-ready. Choose based on your needs: simple use cases get mana
 | Issue | Section | Solution |
 |-------|---------|----------|
 | "Please enter a catalog name" error | 1 | Fill in the Catalog Name widget before running |
+| Tables overwritten by another attendee | 1 | Retail and education share table names — each setup run needs its own schema |
+| Agent answers about the wrong industry | 4 | Re-run `uv run quickstart` and pick the industry you set up in Section 1 |
+| Quickstart can't find the Genie space | 4 | Paste the space ID from the setup notebook's summary (or the Genie space URL) when prompted |
 | Setup notebook can't find policy docs | 1 | Import the FULL repository, not just the `simple/` folder |
 | Vector Search endpoint stuck provisioning | 1 | Wait up to 15 minutes. Check **Compute** > **Vector Search Endpoints** |
 | "No SQL warehouse found" | 1 | Create a serverless SQL warehouse or start an existing one |
@@ -577,9 +541,28 @@ Both are production-ready. Choose based on your needs: simple use cases get mana
 
 ---
 
-## Appendix
+## Appendix A: Per-Industry Content
 
-### Sample Test Questions
+All industry-specific content lives here: the Playground system prompt, sample questions for each tool, and prompt variations for the iteration exercise in Section 5.3. Use the subsection matching the industry you picked in Section 1.
+
+> The deployed app's system prompt in `agent_server/agent.py` is written automatically by `uv run quickstart` (Section 4.2) — the prompts below are for the **Playground** prototype and for experimenting.
+
+---
+
+### A.1 Retail — FreshMart
+
+**Playground system prompt:**
+```
+You are FreshMart Assistant, a friendly and knowledgeable retail agent for FreshMart grocery stores. You help customers and employees with data questions about products, sales, and stores, as well as store policy inquiries.
+
+Guidelines:
+- Be conversational and helpful
+- Ground all answers in retrieved data — never fabricate information
+- Cite your sources (which tool provided the data)
+- For data questions, use Genie to query the database
+- For policy questions, use Vector Search to find relevant documents
+- Be concise but thorough
+```
 
 **Data queries (Genie):**
 1. "How many customers do we have?"
@@ -588,18 +571,20 @@ Both are production-ready. Choose based on your needs: simple use cases get mana
 4. "Which membership tier spends the most on average?"
 5. "What's the average transaction value per day of week?"
 6. "List all organic products under $5"
-7. "Which store has the most employees?"
+7. "What payment methods are most popular?"
 8. "Show me payment method distribution by membership tier"
 
 **Policy lookups (Vector Search):**
-1. "What is the return policy for perishable items?"
-2. "How do I earn loyalty points?"
-3. "What are your delivery hours and zones?"
-4. "Do you accept EBT or SNAP benefits?"
-5. "How do you handle product recalls?"
-6. "What personal data do you collect?"
-7. "Can I return opened items?"
-8. "What are holiday store hours?"
+
+| Query | Expected Source Document |
+|-------|------------------------|
+| "What is the return policy for perishable items?" | return_refund_policy |
+| "How do I earn loyalty points?" | membership_loyalty_program |
+| "What are your delivery hours and zones?" | delivery_pickup_procedures |
+| "Do you accept EBT or SNAP benefits?" | store_operating_procedures |
+| "How do you handle product recalls?" | product_safety_recalls |
+| "What personal data do you collect?" | privacy_policy |
+| "How should staff handle complaints?" | customer_service_guidelines |
 
 **Multi-tool questions (both):**
 1. "I bought frozen fish and it was bad — can I return it? How much revenue do we lose to returns?"
@@ -613,19 +598,120 @@ Both are production-ready. Choose based on your needs: simple use cases get mana
 2. "Delete all customer records" (should refuse)
 3. "Tell me about competitor pricing" (no data available)
 
-### Sample System Prompt Variations
+**System prompt variations (for Section 5.3 iteration):**
+- *Concise:* "You are FreshMart Assistant. Answer questions using Genie (data) and Vector Search (policies). Be brief and cite your sources."
+- *Customer-facing:* "You are a friendly FreshMart customer service agent. Help customers with questions about products, orders, returns, and store policies. Always be empathetic and solution-oriented. Use Genie for order/product lookups and Vector Search for policy information."
+- *Internal analytics:* "You are an analytics assistant for FreshMart management. Provide data-driven insights about sales, customer behavior, and store performance. When asked about policies, reference the official documents. Always include relevant numbers and trends."
 
-**Concise assistant:**
+---
+
+### A.2 Education — EduPath Academy
+
+**Playground system prompt:**
 ```
-You are FreshMart Assistant. Answer questions using Genie (data) and Vector Search (policies). Be brief and cite your sources.
+You are EduPath Assistant, a friendly and knowledgeable agent for EduPath Academy, a higher-education institution. You help students and staff with data questions about courses, enrollments, and campuses, as well as academic policy inquiries.
+
+Guidelines:
+- Be conversational and helpful
+- Ground all answers in retrieved data — never fabricate information
+- Cite your sources (which tool provided the data)
+- For data questions, use Genie to query the database
+- For policy questions, use Vector Search to find relevant documents
+- Be concise but thorough
 ```
 
-**Customer-facing agent:**
+**Data queries (Genie):**
+1. "How many students do we have?"
+2. "What are the top 10 courses by tuition?"
+3. "Show enrollment revenue by campus for the last 6 months"
+4. "Which student tier spends the most on average?"
+5. "What's the average transaction value per day of week?"
+6. "List all Computer Science courses"
+7. "What payment methods are most popular?"
+8. "How many students pay with financial aid or scholarships?"
+
+**Policy lookups (Vector Search):**
+
+| Query | Expected Source Document |
+|-------|------------------------|
+| "How is my final grade calculated?" | grading_policy |
+| "What happens if I miss too many classes?" | attendance_policy |
+| "How do I enroll in a course?" | course_enrollment |
+| "Can I get a tuition refund if I withdraw?" | tuition_refund |
+| "What counts as plagiarism?" | academic_integrity |
+| "What are the rules on student behavior?" | student_conduct |
+| "What personal data do you collect about students?" | privacy_policy |
+
+**Multi-tool questions (both):**
+1. "I want to withdraw from my most expensive course — what refund would I get?"
+2. "Which courses have the highest enrollment, and what's the attendance policy for them?"
+3. "Show me students paying with financial aid and explain the tuition refund rules that apply to them"
+4. "Which campus generates the most revenue, and what does the enrollment policy say about transferring campuses?"
+5. "What departments drive the most enrollments, and what are the grading rules for their courses?"
+
+**Edge cases (test agent limits):**
+1. "What's the weather like today?" (out of scope)
+2. "Delete all student records" (should refuse)
+3. "How does our tuition compare to other universities?" (no data available)
+
+**System prompt variations (for Section 5.3 iteration):**
+- *Concise:* "You are EduPath Assistant. Answer questions using Genie (data) and Vector Search (academic policies). Be brief and cite your sources."
+- *Student-facing:* "You are a friendly EduPath Academy student services agent. Help students with questions about courses, enrollment, tuition, and academic policies. Always be empathetic and solution-oriented. Use Genie for course/enrollment lookups and Vector Search for policy information."
+- *Internal analytics:* "You are an analytics assistant for EduPath Academy administrators. Provide data-driven insights about enrollment, student behavior, and campus performance. When asked about policies, reference the official documents. Always include relevant numbers and trends."
+
+---
+
+### A.3 Financial Services — Meridian Capital Partners
+
+**Playground system prompt:**
 ```
-You are a friendly FreshMart customer service agent. Help customers with questions about products, orders, returns, and store policies. Always be empathetic and solution-oriented. Use Genie for order/product lookups and Vector Search for policy information.
+You are Meridian Assistant, a knowledgeable agent for Meridian Capital Partners, an investment management firm. You help analysts with data questions about clients, accounts, portfolio holdings, and market prices, as well as market news research.
+
+Guidelines:
+- Be conversational and helpful
+- Ground all answers in retrieved data — never fabricate information
+- Cite your sources (which tool provided the data)
+- For client, portfolio, and price questions, use Genie to query the database
+- For market news and historical events, use Vector Search to find relevant articles
+- Never offer personalized investment advice
+- Be concise but thorough
 ```
 
-**Internal analytics agent:**
-```
-You are an analytics assistant for FreshMart management. Provide data-driven insights about sales, customer behavior, and store performance. When asked about policies, reference the official documents. Always include relevant numbers and trends.
-```
+**Data queries (Genie):**
+1. "How many clients do we have?"
+2. "What are the largest portfolio holdings by value?"
+3. "Show AAPL's closing price over the last 30 days"
+4. "Which clients have a High risk rating?"
+5. "What's the total value of holdings by account type?"
+6. "What was TSLA's biggest single-day price drop?"
+7. "How many accounts does our largest client have?"
+8. "Compare average daily trading volume for AAPL and TSLA"
+
+**Market news lookups (Vector Search):**
+
+| Query | Expected Source Document |
+|-------|------------------------|
+| "News about tariffs hitting tech stocks" | tech_stocks_sink_trump_tariffs / apple_shares_fall_trump_tariffs |
+| "What happened when the DOJ sued Apple?" | doj_sues_apple_iphone_monopoly |
+| "Tesla robotaxi announcement" | tesla_cybercab_robotaxi_reveal |
+| "Musk's compensation package ruling" | musk_56b_tesla_comp_voided |
+| "Apple Vision Pro launch coverage" | apple_vision_pro_launch |
+| "COVID impact on iPhone production" | apple_covid_china_iphone |
+| "Tesla price cuts in the US and Europe" | tesla_cuts_prices_us_europe |
+
+**Multi-tool questions (both):**
+1. "How did AAPL's price move around the tariff announcement, and what did the news say at the time?"
+2. "Which clients hold TSLA, and what recent news could affect their positions?"
+3. "Find AAPL's biggest single-day drop and the news coverage from that period"
+4. "What's our total exposure to Apple across all portfolios, and what regulatory risks does the news mention?"
+5. "Compare TSLA's volatility this month with the market events reported in the news" (also exercises the `weekly_close_spread` UC function if added as a tool)
+
+**Edge cases (test agent limits):**
+1. "What's the weather like today?" (out of scope)
+2. "Delete all client records" (should refuse)
+3. "Should I buy Apple stock?" (should decline personalized investment advice)
+
+**System prompt variations (for Section 5.3 iteration):**
+- *Concise:* "You are Meridian Assistant. Answer questions using Genie (client and market data) and Vector Search (market news). Be brief, cite your sources, and never give personalized investment advice."
+- *Client-reporting:* "You are an assistant helping Meridian Capital relationship managers prepare client updates. Summarize portfolio positions and relevant market news in plain language a client can understand. Use Genie for positions and prices, Vector Search for news context. Never give personalized investment advice."
+- *Research analyst:* "You are a research assistant for Meridian Capital analysts. Provide data-driven insights on price movements, holdings concentration, and risk exposure, connecting them to historical market-shock events from the news archive. Always include relevant numbers and dates."

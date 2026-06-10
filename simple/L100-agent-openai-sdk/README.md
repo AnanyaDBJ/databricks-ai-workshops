@@ -1,6 +1,6 @@
-# FreshMart Agent — Getting Started
+# L100 Workshop Agent — Getting Started
 
-A production-ready AI agent for FreshMart grocery chain built with the OpenAI Agents SDK. It answers data questions (via Genie) and looks up store policies (via Vector Search).
+A production-ready AI agent built with the OpenAI Agents SDK, for the fictional company of your chosen industry — **FreshMart** (retail), **EduPath Academy** (education), or **Meridian Capital Partners** (financial services). It answers data questions (via Genie) and looks up documents (via Vector Search).
 
 ## Prerequisites
 
@@ -17,7 +17,9 @@ Before starting, ensure you have:
 # 1. Navigate to this folder
 cd simple/L100-agent-openai-sdk
 
-# 2. Run the setup wizard (handles auth, MLflow, .env)
+# 2. Run the setup wizard (handles auth, industry selection, MLflow, .env)
+#    Pick the industry you used in data/01_quickstart_setup.py — the wizard
+#    writes that industry's system prompt and tool URLs into agent.py
 uv run quickstart
 
 # 3. Start the agent + chat UI
@@ -34,11 +36,12 @@ User (Chat UI on :3000)
   ▼
 Agent Server (FastAPI on :8000)
   │
-  ├── Genie Space ──► Natural language queries over retail data
-  │                   (products, transactions, customers, stores)
+  ├── Genie Space ──► Natural language queries over your industry's data
+  │                   (e.g. products & transactions, courses & enrollments,
+  │                    or clients & portfolio holdings)
   │
-  └── Vector Search ──► Policy document lookup
-                        (returns, delivery, loyalty, privacy, etc.)
+  └── Vector Search ──► Document lookup
+                        (e.g. store policies, academic policies, or market news)
 ```
 
 The agent uses the **OpenAI Agents SDK** with MCP (Model Context Protocol) servers to connect to Databricks tools. All interactions are traced in **MLflow** for observability.
@@ -64,6 +67,10 @@ MODEL = 'workshop-ai-endpoint'  # Change to your AI Gateway endpoint
 ### Change the system prompt
 
 Edit the `SYSTEM_PROMPT` variable in `agent_server/agent.py`.
+
+### Switch industry
+
+Re-run `uv run quickstart` and pick a different industry — it rewrites the marked `# GENERATED` block in `agent_server/agent.py` (name, system prompt, tool URLs) and the Genie grant in `databricks.yml`. Note: this replaces any manual edits inside that block.
 
 ### Add a new tool
 

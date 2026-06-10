@@ -28,6 +28,7 @@ set_trace_processors([])  # only use mlflow for trace processing
 mlflow.openai.autolog()
 
 # GENERATED
+# This block is configured for your industry and workspace by 'uv run quickstart'.
 
 NAME = 'agent-freshmart'
 SYSTEM_PROMPT = (

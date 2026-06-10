@@ -11,6 +11,12 @@ Steps:
   3. Databricks auth — use --profile if provided, otherwise list existing profiles
      for interactive selection, or create a new DEFAULT profile with --host / prompt.
      Validate the profile; authenticate via OAuth if invalid. Save profile to .env.
+  3.5. Workshop industry — pick an industry (retail / education / financial_services)
+     and the catalog + schema used by the data setup notebook. Looks up the matching
+     Genie space, rewrites the GENERATED block in agent_server/agent.py with the
+     industry's system prompt and MCP server URLs, updates the genie_space resource
+     and app description in databricks.yml, and saves WORKSHOP_* keys to .env.
+     Skipped in non-interactive runs unless --industry/--catalog/--schema are given.
   4. App binding (optional) — if --app-name is provided (or entered interactively),
      update databricks.yml with the app name, then fetch the app's resources via API.
      If the app has an experiment resource, use that ID instead of creating a new one.
@@ -32,6 +38,10 @@ Usage:
 Options:
     --profile NAME    Use specified Databricks profile (non-interactive)
     --host URL        Databricks workspace URL (for initial setup)
+    --industry NAME   Workshop industry: retail, education, financial_services
+    --catalog NAME    UC catalog used by the data setup notebook
+    --schema NAME     UC schema used by the data setup notebook
+    --genie-space-id ID  Genie space ID (skips the lookup by title)
     --lakebase-provisioned-name NAME   Provisioned Lakebase instance name
     --lakebase-autoscaling-endpoint NAME  Autoscaling Lakebase endpoint name
     --skip-lakebase   Skip Lakebase setup (non-interactive / CI use)
@@ -40,6 +50,7 @@ Options:
 """
 
 import argparse
+import ast
 import json
 import os
 import platform
@@ -48,10 +59,13 @@ import secrets
 import shutil
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 from ruamel.yaml import YAML
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
+
+from scripts.industries import INDUSTRIES
 
 
 def _load_yml(path: Path):
@@ -500,7 +514,9 @@ def get_databricks_username(profile_name: str) -> str:
         sys.exit(1)
 
 
-def create_mlflow_experiment(profile_name: str, username: str) -> tuple[str, str]:
+def create_mlflow_experiment(
+    profile_name: str, username: str, experiment_suffix: str | None = None
+) -> tuple[str, str]:
     """Create (or reuse) an MLflow experiment and return (name, id)."""
     print_step("Setting up MLflow experiment...")
 
@@ -509,6 +525,20 @@ def create_mlflow_experiment(profile_name: str, username: str) -> tuple[str, str
         print_error("Could not connect to Databricks workspace")
         print_troubleshooting_api()
         sys.exit(1)
+
+    # Prefer the workshop experiment created by the data setup notebook
+    # (data/01_quickstart_setup.py) for the chosen industry, if it exists.
+    if experiment_suffix:
+        workshop_name = f"/Users/{username}/{experiment_suffix}"
+        try:
+            exp = w.experiments.get_experiment_by_name(experiment_name=workshop_name).experiment
+            if exp and exp.experiment_id:
+                print_success(
+                    f"Reusing workshop experiment '{workshop_name}' (ID: {exp.experiment_id})"
+                )
+                return workshop_name, exp.experiment_id
+        except Exception:
+            pass
 
     # Check if we already have an experiment ID in .env (idempotency)
     existing_id = get_env_value("MLFLOW_EXPERIMENT_ID")
@@ -1483,6 +1513,281 @@ def update_databricks_yml_app_name(app_name: str, budget_policy_id: str | None =
     return app_key
 
 
+AGENT_PY_PATH = Path("agent_server/agent.py")
+GENERATED_START = "# GENERATED"
+GENERATED_END = "# END GENERATED"
+DEFAULT_MODEL_LINES = [
+    "MODEL = 'workshop-ai-endpoint' # ai gateway endpoint",
+]
+
+
+def _format_prompt_literal(prompt: str, indent: str = "    ") -> str:
+    """Render a prompt string as parenthesized adjacent string literals,
+    wrapped at readable line lengths (matching the shipped agent.py style)."""
+    lines = []
+    for segment in re.findall(r"[^\n]*\n+|[^\n]+", prompt):
+        text = segment.rstrip("\n")
+        newlines = segment[len(text):]
+        # Only break at spaces — re-joining the chunks below assumes it
+        chunks = textwrap.wrap(
+            text, width=110, break_on_hyphens=False, break_long_words=False
+        ) or [""]
+        for i, chunk in enumerate(chunks):
+            piece = chunk + (" " if i < len(chunks) - 1 else newlines)
+            lines.append(indent + json.dumps(piece))
+    return "SYSTEM_PROMPT = (\n" + "\n".join(lines) + "\n)"
+
+
+def build_generated_block(
+    industry_cfg: dict,
+    catalog: str,
+    schema: str,
+    genie_space_id: str,
+    genie_title: str,
+    model_lines: list[str],
+) -> str:
+    """Build the agent.py GENERATED block for the chosen industry."""
+    index = industry_cfg["doc_index_name"]
+    vs_label = f"Vector Search: {catalog}.{schema}.{index}"
+    vs_url = f"/api/2.0/mcp/vector-search/{catalog}/{schema}/{index}"
+    genie_label = f"Genie Space: {genie_title}"
+    genie_url = f"/api/2.0/mcp/genie/{genie_space_id}"
+
+    parts = [
+        GENERATED_START,
+        "# This block is configured for your industry and workspace by 'uv run quickstart'.",
+        "",
+        f"NAME = '{industry_cfg['agent_name']}'",
+        _format_prompt_literal(industry_cfg["system_prompt"]),
+        *model_lines,
+        "MCP_SERVERS = [",
+        f"    ({json.dumps(vs_label)}, {json.dumps(vs_url)}),",
+        f"    ({json.dumps(genie_label)}, {json.dumps(genie_url)}),",
+        "]",
+        "",
+        GENERATED_END,
+    ]
+    return "\n".join(parts)
+
+
+def update_agent_py(
+    industry_cfg: dict,
+    catalog: str,
+    schema: str,
+    genie_space_id: str,
+    genie_title: str,
+) -> bool:
+    """Rewrite the GENERATED block in agent_server/agent.py for the chosen industry.
+
+    Returns True on success. If the markers are missing (e.g. the file was
+    hand-edited), refuses to touch the file and prints the block for manual paste.
+    """
+    if not AGENT_PY_PATH.exists():
+        print_error(f"{AGENT_PY_PATH} not found — skipping agent configuration")
+        return False
+
+    content = AGENT_PY_PATH.read_text()
+    lines = content.splitlines(keepends=True)
+    start_idx = end_idx = None
+    for i, line in enumerate(lines):
+        if line.strip() == GENERATED_START and start_idx is None:
+            start_idx = i
+        elif line.strip() == GENERATED_END:
+            end_idx = i
+
+    # Preserve the MODEL line(s) the user may have customized
+    if start_idx is not None and end_idx is not None and start_idx < end_idx:
+        existing_block = lines[start_idx : end_idx + 1]
+        model_lines = [
+            line.rstrip("\n")
+            for line in existing_block
+            if re.match(r"(# )?MODEL\b", line.strip())
+        ]
+    else:
+        model_lines = []
+    if not model_lines:
+        model_lines = DEFAULT_MODEL_LINES
+
+    new_block = build_generated_block(
+        industry_cfg, catalog, schema, genie_space_id, genie_title, model_lines
+    )
+
+    if start_idx is None or end_idx is None or start_idx >= end_idx:
+        print_error(
+            f"Could not find '{GENERATED_START}' / '{GENERATED_END}' markers in {AGENT_PY_PATH}."
+        )
+        print("The file looks hand-edited, so it was left untouched.")
+        print("To configure it manually, replace the agent definition with:\n")
+        print(new_block)
+        return False
+
+    new_content = "".join(lines[:start_idx]) + new_block + "\n" + "".join(lines[end_idx + 1 :])
+    try:
+        ast.parse(new_content)
+    except SyntaxError as e:
+        print_error(f"Generated agent.py would not parse ({e}) — file left untouched")
+        return False
+
+    AGENT_PY_PATH.write_text(new_content)
+    print_success(f"Configured {AGENT_PY_PATH} for industry '{industry_cfg['brand']}'")
+    return True
+
+
+def find_genie_space(
+    profile_name: str, industry_cfg: dict, schema: str, interactive: bool
+) -> tuple[str, str] | None:
+    """Find the Genie space created by the data setup notebook.
+
+    Matches by exact title '{prefix}({schema})' first, then by title prefix.
+    Returns (space_id, title), or None if it cannot be resolved.
+    """
+    expected_title = f"{industry_cfg['genie_title_prefix']}({schema})"
+
+    spaces = []
+    w = get_workspace_client(profile_name)
+    if w:
+        try:
+            page_token = None
+            while True:
+                resp = w.genie.list_spaces(page_token=page_token)
+                spaces.extend(resp.spaces or [])
+                page_token = getattr(resp, "next_page_token", None)
+                if not page_token:
+                    break
+        except Exception as e:
+            print(f"  Could not list Genie spaces: {e}")
+
+    exact = [s for s in spaces if (s.title or "") == expected_title]
+    candidates = exact or [
+        s for s in spaces if (s.title or "").startswith(industry_cfg["genie_title_prefix"])
+    ]
+
+    if len(candidates) == 1:
+        space = candidates[0]
+        print_success(f"Found Genie space: {space.title} ({space.space_id})")
+        return space.space_id, space.title or expected_title
+
+    if len(candidates) > 1 and interactive:
+        print(f"\nMultiple Genie spaces match '{industry_cfg['genie_title_prefix']}*':")
+        for i, space in enumerate(candidates, 1):
+            print(f"  {i}. {space.title} ({space.space_id})")
+        choice = input(f"Select a Genie space [1-{len(candidates)}]: ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(candidates):
+            space = candidates[int(choice) - 1]
+            return space.space_id, space.title or expected_title
+
+    if interactive:
+        print(f"\nCould not find a Genie space titled '{expected_title}'.")
+        print("The data setup notebook (data/01_quickstart_setup.py) prints the space ID")
+        print("in its final summary, and it is in the Genie space URL: .../genie/rooms/<id>")
+        space_id = input("Paste the Genie space ID (or press Enter to skip): ").strip()
+        if space_id:
+            return space_id, expected_title
+    return None
+
+
+def update_databricks_yml_genie_space(space_name: str, space_id: str) -> None:
+    """Update the genie_space resource (name + space_id) in databricks.yml."""
+    yml_path = Path("databricks.yml")
+    if not yml_path.exists():
+        return
+
+    yaml, data = _load_yml(yml_path)
+    apps = data.get("resources", {}).get("apps", {})
+    for app_val in apps.values():
+        for resource in app_val.get("resources", []):
+            if "genie_space" in resource:
+                resource["genie_space"]["name"] = DoubleQuotedScalarString(space_name)
+                resource["genie_space"]["space_id"] = DoubleQuotedScalarString(space_id)
+    _save_yml(yaml, data, yml_path)
+    print_success("Updated databricks.yml with Genie space")
+
+
+def update_databricks_yml_app_description(description: str) -> None:
+    """Update the app description in databricks.yml."""
+    yml_path = Path("databricks.yml")
+    if not yml_path.exists():
+        return
+
+    yaml, data = _load_yml(yml_path)
+    apps = data.get("resources", {}).get("apps", {})
+    for app_val in apps.values():
+        app_val["description"] = DoubleQuotedScalarString(description)
+    _save_yml(yaml, data, yml_path)
+
+
+def setup_workshop_industry(args, profile_name: str) -> dict | None:
+    """Configure the workshop for an industry vertical.
+
+    Resolves industry/catalog/schema (flags > .env > interactive prompts), finds
+    the Genie space, rewrites agent.py's GENERATED block, updates databricks.yml,
+    and records WORKSHOP_* keys in .env. Returns the industry config dict, or
+    None if the step was skipped.
+    """
+    interactive = sys.stdin.isatty()
+
+    industry = (args.industry or get_env_value("WORKSHOP_INDUSTRY")).strip().lower()
+    catalog = (args.catalog or get_env_value("WORKSHOP_CATALOG")).strip()
+    schema = (args.schema or get_env_value("WORKSHOP_SCHEMA")).strip()
+
+    if not interactive and not (industry and catalog and schema):
+        print_step("Skipping workshop industry configuration (non-interactive run)")
+        print("  Re-run with --industry/--catalog/--schema to configure agent.py")
+        return None
+
+    print_step("Configuring workshop industry...")
+
+    industry_keys = list(INDUSTRIES)
+    if industry and industry not in INDUSTRIES:
+        print_error(f"Unknown industry '{industry}'. Use: {', '.join(industry_keys)}")
+        sys.exit(1)
+
+    if not industry:
+        print("\nWhich industry did you pick in the data setup notebook?")
+        for i, key in enumerate(industry_keys, 1):
+            print(f"  {i}. {INDUSTRIES[key]['brand']} ({key})")
+        choice = input(f"Select an industry [1-{len(industry_keys)}, default 1]: ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(industry_keys):
+            industry = industry_keys[int(choice) - 1]
+        else:
+            industry = industry_keys[0]
+    industry_cfg = INDUSTRIES[industry]
+    print(f"  Industry: {industry_cfg['brand']} ({industry})")
+
+    while not catalog:
+        catalog = input("UC catalog used by the data setup notebook: ").strip()
+    while not schema:
+        schema = input("UC schema used by the data setup notebook: ").strip()
+
+    genie_space_id = (args.genie_space_id or "").strip()
+    if genie_space_id:
+        genie_title = f"{industry_cfg['genie_title_prefix']}({schema})"
+    else:
+        found = find_genie_space(profile_name, industry_cfg, schema, interactive)
+        if not found:
+            if not interactive:
+                print_error(
+                    "Could not resolve the Genie space — pass --genie-space-id explicitly"
+                )
+                sys.exit(1)
+            print("  Skipping agent configuration (no Genie space).")
+            print("  Re-run 'uv run quickstart' once the data setup notebook has finished.")
+            return None
+        genie_space_id, genie_title = found
+
+    update_agent_py(industry_cfg, catalog, schema, genie_space_id, genie_title)
+    update_databricks_yml_genie_space(genie_title, genie_space_id)
+    update_databricks_yml_app_description(industry_cfg["app_description"])
+
+    update_env_file("WORKSHOP_INDUSTRY", industry)
+    update_env_file("WORKSHOP_CATALOG", catalog)
+    update_env_file("WORKSHOP_SCHEMA", schema)
+    update_env_file("WORKSHOP_GENIE_SPACE_ID", genie_space_id)
+    print_success("Saved workshop settings to .env")
+
+    return industry_cfg
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Quickstart setup for Databricks agent development",
@@ -1491,6 +1796,8 @@ def main():
 Examples:
     uv run quickstart                    # Interactive setup
     uv run quickstart --profile DEFAULT  # Use existing profile (non-interactive)
+    uv run quickstart --industry education --catalog my_catalog --schema my_schema
+                                         # Configure agent for an industry
     uv run quickstart --host https://...  # Set up new profile with host
     uv run quickstart --lakebase-provisioned-name my-db   # Provisioned Lakebase
     uv run quickstart --lakebase-autoscaling-endpoint my-endpoint  # Autoscaling
@@ -1507,6 +1814,26 @@ Examples:
         "--host",
         help="Databricks workspace URL (for initial setup)",
         metavar="URL",
+    )
+    parser.add_argument(
+        "--industry",
+        help=f"Workshop industry: {', '.join(INDUSTRIES)}",
+        metavar="NAME",
+    )
+    parser.add_argument(
+        "--catalog",
+        help="UC catalog used by the data setup notebook",
+        metavar="NAME",
+    )
+    parser.add_argument(
+        "--schema",
+        help="UC schema used by the data setup notebook",
+        metavar="NAME",
+    )
+    parser.add_argument(
+        "--genie-space-id",
+        help="Genie space ID (skips the lookup by title)",
+        metavar="ID",
     )
     parser.add_argument(
         "--lakebase-provisioned-name",
@@ -1556,6 +1883,10 @@ Examples:
 
         # Step 3: Databricks authentication
         profile_name = setup_databricks_auth(args.profile, args.host)
+
+        # Step 3.5: Workshop industry — configure agent.py and databricks.yml
+        # for the industry chosen in the data setup notebook.
+        workshop_cfg = setup_workshop_industry(args, profile_name)
 
         # Step 4: Existing app binding (optional) — do this early so app resources
         # (experiment, lakebase) take precedence over fresh creation.
@@ -1687,7 +2018,13 @@ Examples:
                 if yml_experiment_id:
                     update_env_file("MLFLOW_EXPERIMENT_ID", yml_experiment_id)
 
-            experiment_name, experiment_id = create_mlflow_experiment(profile_name, username)
+            experiment_name, experiment_id = create_mlflow_experiment(
+                profile_name,
+                username,
+                experiment_suffix=(
+                    workshop_cfg["mlflow_experiment_suffix"] if workshop_cfg else None
+                ),
+            )
             update_env_file("MLFLOW_EXPERIMENT_ID", experiment_id)
             print_success("Updated .env with experiment ID")
             update_databricks_yml_experiment(experiment_id)
@@ -1749,7 +2086,13 @@ Examples:
         summary = f"""
 ✓ Prerequisites verified (uv, Node.js, Databricks CLI)
 ✓ Databricks authenticated with profile: {profile_name}
-✓ Configuration files created (.env)
+✓ Configuration files created (.env)"""
+
+        if workshop_cfg:
+            summary += f"""
+✓ Agent configured for industry: {workshop_cfg['brand']}"""
+
+        summary += f"""
 
 ✓ MLflow experiment set up for tracing and evaluation: {experiment_name}
 ✓ Experiment ID: {experiment_id}"""
