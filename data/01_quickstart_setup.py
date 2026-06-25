@@ -99,7 +99,7 @@ if INDUSTRY == "financial_services":
 
 # COMMAND ----------
 
-# spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}") # Only if you have access to create catalog and want to have a new catalog for the workshop
+spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}") # Only if you have access to create catalog and want to have a new catalog for the workshop
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {FULL_SCHEMA}")
 print(f"Catalog '{CATALOG}' and schema '{FULL_SCHEMA}' are ready.")
 
@@ -436,3 +436,25 @@ print("=" * 70)
 #     name="/Users/<your email>/<experiment name>",
 #     artifact_location="dbfs:/Volumes/<catalog>/<schema>/<volume>/mlflow-artifacts"
 # )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC
+# MAGIC ## Playground Industry System Prompt
+# MAGIC
+# MAGIC Use this system prompt for the eventual agent in the playground.
+
+# COMMAND ----------
+
+from verticals.registry import get_system_prompt
+system_prompt = get_system_prompt(INDUSTRY)
+
+
+print("=" * 70)
+print(f"  SYSTEM PROMPT: \n\n {system_prompt}")
+print("=" * 70)
+
+# COMMAND ----------
+
+

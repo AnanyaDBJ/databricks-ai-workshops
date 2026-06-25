@@ -5,7 +5,7 @@ from verticals.financial_services import tables
 
 
 def _genie_title(schema: str) -> str:
-    return f"Financial_Services_Data_({schema})"
+    return f"Financial Services Data ({schema})"
 
 
 def _udf_sql(full_schema: str) -> str:
