@@ -66,13 +66,10 @@ if "catalog" not in dbutils.widgets.getAll():
     dbutils.widgets.text("catalog", "", "Catalog Name")
 if "schema" not in dbutils.widgets.getAll():
     dbutils.widgets.text("schema", "", "Schema Name")
-if "warehouse_id" not in dbutils.widgets.getAll():
-    dbutils.widgets.text("warehouse_id", "", "SQL Warehouse ID (optional)")
 
 INDUSTRY = dbutils.widgets.get("industry")
 CATALOG = dbutils.widgets.get("catalog")
 SCHEMA = dbutils.widgets.get("schema")
-WAREHOUSE_ID_WIDGET = dbutils.widgets.get("warehouse_id")
 
 if not CATALOG:
     raise ValueError(
@@ -101,7 +98,7 @@ if INDUSTRY == "financial_services":
 # MAGIC %md
 # MAGIC ## Connect: Workspace client and SQL warehouse
 # MAGIC
-# MAGIC This notebook writes all data through the SQL Statement Execution API (no Spark), so it needs a **SQL warehouse**. It is auto-discovered; set the **SQL Warehouse ID** widget to pin a specific one.
+# MAGIC This notebook writes all data through the SQL Statement Execution API (no Spark), so it needs a **SQL warehouse**. The first available warehouse is auto-discovered (a running one is preferred).
 
 # COMMAND ----------
 
@@ -114,11 +111,11 @@ from lib.workspace_links import notebook_org_id, workspace_host
 w = WorkspaceClient()
 WORKSPACE_HOST = workspace_host(w)
 WORKSPACE_ORG_ID = notebook_org_id(dbutils)
-WAREHOUSE_ID = WAREHOUSE_ID_WIDGET or _first_warehouse_id(w)
+WAREHOUSE_ID = _first_warehouse_id(w)
 if not WAREHOUSE_ID:
     raise ValueError(
-        "No SQL warehouse found. Start a SQL warehouse (or set the 'SQL Warehouse ID' widget) "
-        "and click Run All again — this notebook writes via the SQL Statement Execution API."
+        "No SQL warehouse found. Start a SQL warehouse and click Run All again — "
+        "this notebook writes via the SQL Statement Execution API."
     )
 
 writer = SqlTableWriter(w, WAREHOUSE_ID)

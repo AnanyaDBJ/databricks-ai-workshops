@@ -52,10 +52,19 @@ class SqlTableWriter:
         self.warehouse_id = warehouse_id
 
     @classmethod
-    def from_profile(cls, profile: str, warehouse_id: str) -> "SqlTableWriter":
+    def from_profile(cls, profile: str, warehouse_id: str | None = None) -> "SqlTableWriter":
         from databricks.sdk import WorkspaceClient
 
-        return cls(WorkspaceClient(profile=profile), warehouse_id)
+        w = WorkspaceClient(profile=profile)
+        if not warehouse_id:
+            from lib.provisioning import _first_warehouse_id
+
+            warehouse_id = _first_warehouse_id(w)
+            if not warehouse_id:
+                raise ValueError(
+                    "No SQL warehouse found. Start a SQL warehouse or pass --warehouse-id."
+                )
+        return cls(w, warehouse_id)
 
     @property
     def host(self) -> str:

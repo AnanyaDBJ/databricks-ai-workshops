@@ -16,11 +16,14 @@ Full parity with the notebook:
 Usage:
     python local_cli_setup_script/setup.py \
         --industry retail --catalog my_catalog --schema my_schema \
-        --profile DEFAULT --warehouse-id <WAREHOUSE_ID>
+        --profile DEFAULT
+
+    # The first available SQL warehouse is auto-detected (a running one is
+    # preferred). Pass --warehouse-id <id> only to pin a specific warehouse.
 
     # data-only (skip the SDK-backed steps):
     python local_cli_setup_script/setup.py --industry retail \
-        --catalog c --schema s --warehouse-id <id> \
+        --catalog c --schema s \
         --skip-vector-search --skip-genie --skip-mlflow
 """
 
@@ -43,7 +46,11 @@ def main():
     p.add_argument("--catalog", required=True)
     p.add_argument("--schema", required=True)
     p.add_argument("--profile", default="DEFAULT")
-    p.add_argument("--warehouse-id", required=True)
+    p.add_argument(
+        "--warehouse-id",
+        default=None,
+        help="SQL warehouse ID. If omitted, the first available warehouse is auto-detected.",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--skip-vector-search", action="store_true")
     p.add_argument("--skip-genie", action="store_true")
@@ -53,6 +60,7 @@ def main():
     full_schema = f"{args.catalog}.{args.schema}"
     writer = SqlTableWriter.from_profile(args.profile, args.warehouse_id)
     print(f"Host: {writer.host}")
+    print(f"SQL warehouse: {writer.warehouse_id}")
     print(f"Industry: {args.industry}  |  Target: {full_schema}\n")
 
     # ── Step 1: Catalog + schema ────────────────────────────────────────
@@ -112,7 +120,7 @@ def main():
             title=workshop.genie_title,
             description=workshop.genie_description,
             table_identifiers=[f"{full_schema}.{t}" for t in workshop.tables],
-            warehouse_id=args.warehouse_id,
+            warehouse_id=writer.warehouse_id,
             org_id=None,
         )
 

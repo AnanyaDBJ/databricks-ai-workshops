@@ -55,43 +55,38 @@ cd databricks-ai-workshops
 
 ### Step 1: Authenticate
 
+Point the CLI at the **specific workspace** you want to set up. Teams often stand up a dedicated workshop workspace, so don't assume the default — use that workspace's URL:
+
 ```bash
-databricks auth login --profile DEFAULT
+databricks auth login --host https://<your-workspace-url> --profile DEFAULT
 ```
 
-Follow the browser prompts, then verify:
+Replace `<your-workspace-url>` with your workspace host (e.g. `dbc-a1b2c3d4-e5f6.cloud.databricks.com` or `adb-1234567890.11.azuredatabricks.net`).
+
+Follow the browser prompts, then verify you're connected to the right workspace:
 
 ```bash
 databricks current-user me --profile DEFAULT
 ```
 
-### Step 2: Find your warehouse ID
-
-```bash
-databricks warehouses list --profile DEFAULT
-```
-
-Pick a warehouse that shows `RUNNING` and copy its ID.
-
-### Step 3: Install dependencies
+### Step 2: Install dependencies
 
 ```bash
 cd data
 pip install -r requirements.txt
 ```
 
-### Step 4: Run setup (one command)
+### Step 3: Run setup (one command)
 
 ```bash
 python local_cli_setup_script/setup.py \
   --industry retail \
   --catalog <CATALOG> \
   --schema <SCHEMA> \
-  --profile DEFAULT \
-  --warehouse-id <WAREHOUSE-ID>
+  --profile DEFAULT
 ```
 
-Replace `<CATALOG>` and `<SCHEMA>` with names you choose (e.g. `my_catalog` and `retail_agent`), and `<WAREHOUSE-ID>` with the ID from Step 2. Swap `--industry` for `education` or `financial_services` if you prefer.
+Replace `<CATALOG>` and `<SCHEMA>` with names you choose (e.g. `my_catalog` and `retail_agent`). Swap `--industry` for `education` or `financial_services` if you prefer. The first available SQL warehouse is auto-detected (a running one is preferred) — pass `--warehouse-id <id>` only to pin a specific warehouse (find IDs with `databricks warehouses list --profile DEFAULT`).
 
 This creates the catalog and schema, then all six setup steps: data tables, chunked documents, the Vector Search endpoint + index, a Genie Space, and an MLflow experiment. The Vector Search step takes 5–10 minutes to provision.
 
@@ -142,8 +137,7 @@ Navigate to `data/workspace_setup_script/01_quickstart_setup.py` and open it.
 ### Step 2: Configure and run
 
 1. At the top, set the **Industry**, **Catalog**, and **Schema** widgets.
-2. (Optional) Set the **SQL Warehouse ID** widget to pin a specific warehouse — otherwise one is auto-discovered.
-3. Click **Run All** and wait ~10–15 minutes (most of the time is Vector Search provisioning).
+2. Click **Run All** and wait ~10–15 minutes (most of the time is Vector Search provisioning). The first available SQL warehouse is auto-detected.
 
 > The notebook writes data through a SQL warehouse (not Spark), so make sure one is running.
 
@@ -196,8 +190,8 @@ For example, `retail` creates ~200 customers, ~500 products, 10 stores, 2,000 tr
 
 | Issue | Fix |
 |-------|-----|
-| `JSONDecodeError` or auth errors | Auth expired — run `databricks auth login --profile DEFAULT` again |
-| No SQL warehouse found / `WAREHOUSE_NOT_FOUND` | Start a SQL warehouse (Compute → SQL Warehouses), then re-run. In the notebook you can also set the **SQL Warehouse ID** widget |
+| `JSONDecodeError` or auth errors | Auth expired — run `databricks auth login --host https://<your-workspace-url> --profile DEFAULT` again |
+| No SQL warehouse found / `WAREHOUSE_NOT_FOUND` | Start a SQL warehouse (Compute → SQL Warehouses), then re-run. The CLI also accepts `--warehouse-id <id>` to pin a specific warehouse |
 | Vector Search step times out | The endpoint can take 10+ minutes — re-run, setup is idempotent |
 | Vector Search index shows "Syncing" | Normal — wait 5–10 minutes after creation for the initial sync |
 | Notebook widget doesn't list catalogs | Ensure your workspace/cluster has Unity Catalog access |
