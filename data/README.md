@@ -1,76 +1,208 @@
-# Workshop synthetic data
+# Workshop Data Setup
 
-Pick an **industry** in [`01_quickstart_setup.py`](01_quickstart_setup.py) (widget: `retail`, `education`, or `financial_services`). The notebook generates tables and chunks markdown from each vertical’s `docs/` folder.
+> **This is the first step for all workshop levels.** Complete this setup before starting any workshop (Simple, Medium, or Advanced).
 
-## Layout
+This creates the shared dataset that every workshop level depends on: industry data tables, chunked documents, a Vector Search index, a Genie Space, and an MLflow experiment — all in a Unity Catalog schema you choose.
 
+You pick **one industry** to set up:
+
+| Industry | Brand | Data tables | Documents |
+|----------|-------|-------------|-----------|
+| `education` (default) | EduPath Academy | `customers`, `products`, `stores`, `transactions`, `transaction_items`, `payment_history` (school semantics) | course/policy docs |
+| `retail` | FreshMart | Same six tables (grocery semantics) | store policy docs |
+| `financial_services` | Meridian Capital Partners | `clients`, `accounts`, `trades`, `portfolio_holdings`, `dailyprice`, `company_profile` | market-shock news articles |
+
+---
+
+## Before you start
+
+Both setup paths write data through a **SQL warehouse**, so you need:
+
+- A **running SQL warehouse** (Compute → SQL Warehouses in Databricks)
+- **Unity Catalog** access — permission to create a catalog/schema and tables
+- A workspace with **Vector Search** and the **Foundation Model API** enabled
+
+---
+
+## Choose Your Path
+
+| Path | Best for | Time |
+|------|----------|------|
+| **[Path A: Local CLI](#path-a-local-cli)** | Running setup from your laptop | ~15 min |
+| **[Path B: Workspace Notebook](#path-b-workspace-notebook)** | Everything inside Databricks, no local tools | ~15 min |
+
+Both paths run the **same code** and produce the **same result**. Pick one.
+
+---
+
+## Path A: Local CLI
+
+Run one command from your laptop. It connects to your Databricks workspace via the CLI.
+
+### Prerequisites
+
+| Tool | Install |
+|------|---------|
+| Databricks CLI | `brew tap databricks/tap && brew install databricks` |
+| Python 3.9+ | [python.org](https://www.python.org/downloads/) |
+
+### Step 0: Clone the repository
+
+```bash
+git clone https://github.com/AnanyaDBJ/databricks-ai-workshops.git
+cd databricks-ai-workshops
 ```
-data/
-├── 00-utils.ipynb              # optional: MLflow artifacts on UC Volume (restricted networks)
-├── 01_quickstart_setup.py      # main workshop setup notebook
-├── lib/
-│   ├── generate.py             # dispatches to verticals/registry.py
-│   ├── chunking.py             # writes chunked docs table (name depends on industry)
-│   └── demo_names.py
-├── verticals/
-│   ├── registry.py             # lists onboarded industries
-│   ├── retail/
-│   │   ├── workshop.py         # brand, Genie/VS names, optional UC function
-│   │   ├── tables.py
-│   │   └── docs/               # source markdown for Vector Search
-│   ├── education/
-│   │   ├── workshop.py
-│   │   ├── tables.py
-│   │   └── docs/
-│   └── financial_services/
-│       ├── workshop.py
-│       ├── tables.py
-│       └── docs/
-└── scripts/
-    └── generate_structured_data.py
+
+### Step 1: Authenticate
+
+```bash
+databricks auth login --profile DEFAULT
 ```
 
-## Industries
+Follow the browser prompts, then verify:
 
-| Industry | Brand | Tables | Docs |
-|----------|-------|--------|------|
-| `education` (default) | EduPath Academy | 6 retail-shaped table names, school semantics | `verticals/education/docs/` |
-| `retail` | FreshMart | Same 6 tables, grocery semantics | `verticals/retail/docs/` |
-| `financial_services` | Meridian Capital Partners | `{catalog}.{schema}`: clients, accounts, portfolio_holdings, dailyprice, company_profile | 13 AAPL/TSLA market-shock news articles in `verticals/financial_services/docs/` |
+```bash
+databricks current-user me --profile DEFAULT
+```
 
-## Local CLI (optional)
+### Step 2: Find your warehouse ID
+
+```bash
+databricks warehouses list --profile DEFAULT
+```
+
+Pick a warehouse that shows `RUNNING` and copy its ID.
+
+### Step 3: Install dependencies
 
 ```bash
 cd data
-python scripts/generate_structured_data.py --industry retail --catalog CATALOG --schema SCHEMA
+pip install -r requirements.txt
 ```
 
-`local_cli_setup_script/*` is a legacy path and remains retail-centric; prefer `scripts/generate_structured_data.py` and notebook flow for multi-industry runs.
+### Step 4: Run setup (one command)
 
-## Financial services market data
+```bash
+python local_cli_setup_script/setup.py \
+  --industry retail \
+  --catalog <CATALOG> \
+  --schema <SCHEMA> \
+  --profile DEFAULT \
+  --warehouse-id <WAREHOUSE-ID>
+```
 
-For `financial_services`, **all workshop tables** (including market data) live in `{catalog}.{schema}` from the setup widgets.
+Replace `<CATALOG>` and `<SCHEMA>` with names you choose (e.g. `my_catalog` and `retail_agent`), and `<WAREHOUSE-ID>` with the ID from Step 2. Swap `--industry` for `education` or `financial_services` if you prefer.
 
-Real market data ships with the repo as static CSVs in `verticals/financial_services/market_data/` (`dailyprice.csv.gz`: 151,702 rows of daily prices for 29 tickers, 1999–2023; `company_profile.csv`: 29 rows). It is a one-time export of the Databricks Marketplace [Sample Market Data - Daily Price Data](https://marketplace.databricks.com/details/0f7c65e3-875a-40e2-bd58-5c8bcadbdc2b) listing, and setup loads it into `{catalog}.{schema}` automatically — **no Marketplace or Delta Sharing access required** on the target workspace.
+This creates the catalog and schema, then all six setup steps: data tables, chunked documents, the Vector Search endpoint + index, a Genie Space, and an MLflow experiment. The Vector Search step takes 5–10 minutes to provision.
 
-Other verticals (`education`, `retail`) use fully synthetic data in `{catalog}.{schema}` only.
+> **Data only?** Add `--skip-vector-search`, `--skip-genie`, and/or `--skip-mlflow` to skip those steps.
 
-Agents and lab guides written for education/retail still expect the 6-table names. For `financial_services`, combine **Vector Search** on `market_news_index` (historical shock narratives) with **Genie/SQL** on `dailyprice` (price context around shock dates). Re-run setup only when you add or remove markdown in `docs/` or need to refresh the index.
+When it finishes it prints a summary:
 
-The FSI optional UC function is `weekly_close_spread(ticker_symbol)`. It returns weekly volatility as the standard deviation of day-over-day close returns (%) over the latest 7 trading days for that ticker.
+```
+======================================================================
+  WORKSHOP SETUP COMPLETE
+======================================================================
+  Catalog/Schema:          my_catalog.retail_agent
+  Vector Search index:     my_catalog.retail_agent.policy_docs_index
+  Genie Space ID:          01ef...abcd
+  MLflow experiment:       /Users/you@co.com/... (ID: 1234567890123456)
+======================================================================
+```
 
-Structured tables now receive Unity Catalog table descriptions automatically during generation for all verticals.
+**Save the Vector Search index, Genie Space ID, and MLflow experiment** — your workshop level asks for them.
 
-Chunking and embeddings use the same generic path across industries. The flow is `lib/chunking.py` `chunk_markdown_docs_to_table` → chunk table → Vector Search index. Naming is dynamic by use case:
-- `education`, `retail`: `policy_docs_chunked` → `policy_docs_index`
-- `financial_services`: `market_news_chunked` → `market_news_index`
+### Done!
 
-Vector Search endpoint names use an industry code pattern: `{industry_code}-vs-{schema}`. Current codes are `education`, `retail`, and `fsi` (for `financial_services`), so examples are `education-vs-my-schema`, `retail-vs-my-schema`, and `fsi-vs-my-schema`.
+Go to your workshop level:
 
-## Onboarding a new industry
+| Level | Next step |
+|-------|-----------|
+| Simple (L100) | [`simple/LAB_GUIDE.md`](../simple/LAB_GUIDE.md) |
+| Medium (L200) | [`medium/lab_instructions/SETUP_GUIDE.md`](../medium/lab_instructions/SETUP_GUIDE.md) |
+| Advanced (L300) | [`advanced/WORKSHOP_INSTRUCTIONS.md`](../advanced/WORKSHOP_INSTRUCTIONS.md) |
 
-1. Add `verticals/<industry>/` with `tables.py`, `docs/`, and `workshop.py` (see an existing vertical).
-2. Register it in `verticals/registry.py` (`_REGISTRY` and import).
-3. If the vertical needs real reference data, bundle it as static files in the vertical folder (like `financial_services/market_data/`) so setup has no external dependencies.
+---
 
-UC functions live in each vertical’s `workshop.py` (`udf_sql` / `udf_name`), not in `lib/generate.py`.
+## Path B: Workspace Notebook
+
+Run everything inside Databricks — no local tools needed.
+
+### Step 0: Import the repository into your workspace
+
+1. In the left sidebar, click **Workspace** → **Repos** (or "Git Folders")
+2. Click **Add** → **Git Folder**
+3. Paste the URL: `https://github.com/AnanyaDBJ/databricks-ai-workshops.git`
+4. Click **Create Git Folder**
+
+### Step 1: Open the notebook
+
+Navigate to `data/workspace_setup_script/01_quickstart_setup.py` and open it.
+
+### Step 2: Configure and run
+
+1. At the top, set the **Industry**, **Catalog**, and **Schema** widgets.
+2. (Optional) Set the **SQL Warehouse ID** widget to pin a specific warehouse — otherwise one is auto-discovered.
+3. Click **Run All** and wait ~10–15 minutes (most of the time is Vector Search provisioning).
+
+> The notebook writes data through a SQL warehouse (not Spark), so make sure one is running.
+
+### Step 3: Copy the output values
+
+When complete, the notebook prints a summary:
+
+```
+======================================================================
+  WORKSHOP SETUP COMPLETE
+======================================================================
+  Catalog/Schema:        my_catalog.retail_agent
+  Vector Search Index:   my_catalog.retail_agent.policy_docs_index
+  Genie Space ID:        01ef...abcd
+  MLflow Experiment ID:  1234567890123456
+======================================================================
+```
+
+**Save these values** — your workshop level asks for them.
+
+### Done!
+
+Go to your workshop level:
+
+| Level | Next step |
+|-------|-----------|
+| Simple (L100) | [`simple/LAB_GUIDE.md`](../simple/LAB_GUIDE.md) |
+| Medium (L200) | [`medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md`](../medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md) |
+| Advanced (L300) | [`advanced/WORKSHOP_INSTRUCTIONS.md`](../advanced/WORKSHOP_INSTRUCTIONS.md) |
+
+---
+
+## What You Now Have
+
+Every industry produces the same kinds of resources in `{catalog}.{schema}`:
+
+| Resource | Description |
+|----------|-------------|
+| Data tables | Six industry tables (see the table at the top) |
+| Document chunk table | Source documents split into searchable chunks |
+| Vector Search index | Semantic search over the documents |
+| Genie Space | Natural-language querying of your data tables |
+| MLflow experiment | Agent tracing and evaluation |
+
+For example, `retail` creates ~200 customers, ~500 products, 10 stores, 2,000 transactions, ~10,000 transaction line items, and 400 payment records, plus the chunked store-policy docs and a `policy_docs_index`. `financial_services` instead loads clients, accounts, a trade ledger, portfolio holdings, and bundled market data (`dailyprice`, `company_profile`), with a `market_news_index` over historical market-shock articles.
+
+---
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| `JSONDecodeError` or auth errors | Auth expired — run `databricks auth login --profile DEFAULT` again |
+| No SQL warehouse found / `WAREHOUSE_NOT_FOUND` | Start a SQL warehouse (Compute → SQL Warehouses), then re-run. In the notebook you can also set the **SQL Warehouse ID** widget |
+| Vector Search step times out | The endpoint can take 10+ minutes — re-run, setup is idempotent |
+| Vector Search index shows "Syncing" | Normal — wait 5–10 minutes after creation for the initial sync |
+| Notebook widget doesn't list catalogs | Ensure your workspace/cluster has Unity Catalog access |
+| Want to start over | Re-run setup — tables are recreated and resources are reused/refreshed |
+
+---
+
+Both paths are idempotent and use a fixed random seed, so re-running produces the same dataset.

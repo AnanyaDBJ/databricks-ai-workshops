@@ -1,10 +1,22 @@
-"""Chunk markdown into a Unity Catalog table for Vector Search."""
+"""Chunk markdown into a Unity Catalog table for Vector Search.
+
+Spark-free: :func:`build_chunk_table` reads and chunks the markdown into a
+``TableData`` payload; the caller persists it with ``writer.write_table``.
+"""
 
 import hashlib
 import os
 
+from verticals.base import TableData
+
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
+
+CHUNK_COLUMNS = [
+    ("chunk_id", "STRING"),
+    ("doc_name", "STRING"),
+    ("content", "STRING"),
+]
 
 
 def chunk_text(text: str) -> list[str]:
@@ -41,12 +53,11 @@ def chunk_text(text: str) -> list[str]:
     return chunks
 
 
-def chunk_markdown_docs_to_table(
-    spark,
-    full_schema: str,
+def build_chunk_table(
     docs_dir: str,
     target_table: str = "policy_docs_chunked",
-) -> int:
+) -> TableData:
+    """Read and chunk every ``.md`` in ``docs_dir`` into a ``TableData`` (no Spark)."""
     if not os.path.isdir(docs_dir):
         raise FileNotFoundError(f"Docs directory not found: {docs_dir}")
 
@@ -67,17 +78,5 @@ def chunk_markdown_docs_to_table(
             })
         print(f"  {filename}: {len(chunks)} chunks")
 
-    df = spark.createDataFrame(all_chunks)
-    df.write.mode("overwrite").saveAsTable(f"{full_schema}.{target_table}")
-    print(f"\nCreated {full_schema}.{target_table} — {df.count()} chunks")
-    return df.count()
-
-
-def chunk_policy_docs_to_table(
-    spark,
-    full_schema: str,
-    docs_dir: str,
-    target_table: str = "policy_docs_chunked",
-) -> int:
-    """Backward-compatible alias for the old API name."""
-    return chunk_markdown_docs_to_table(spark, full_schema, docs_dir, target_table=target_table)
+    print(f"\nTotal chunks: {len(all_chunks)}")
+    return TableData(name=target_table, columns=CHUNK_COLUMNS, rows=all_chunks)

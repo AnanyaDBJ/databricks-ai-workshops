@@ -4,6 +4,7 @@ import random
 from datetime import datetime, timedelta
 
 from lib.demo_names import CITIES_STATES, FIRST_NAMES, LAST_NAMES, STREETS
+from verticals.base import TableData
 
 TABLES = ["customers", "products", "stores", "transactions", "transaction_items", "payment_history"]
 TABLE_DESCRIPTIONS = {
@@ -13,6 +14,40 @@ TABLE_DESCRIPTIONS = {
     "transactions": "Enrollment and purchase transaction headers with learner, campus, totals, and payment method.",
     "transaction_items": "Line-item detail linking each transaction to selected courses and pricing adjustments.",
     "payment_history": "Student payment method history and billing profile metadata.",
+}
+
+# Physical schema for EduPath's tables. Owned by this vertical so it can
+# evolve independently of other industries.
+COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "customers": [
+        ("customer_id", "STRING"), ("first_name", "STRING"), ("last_name", "STRING"),
+        ("email", "STRING"), ("phone", "STRING"), ("address", "STRING"),
+        ("city", "STRING"), ("state", "STRING"), ("zip_code", "STRING"),
+        ("membership_tier", "STRING"), ("join_date", "STRING"), ("preferences", "STRING"),
+    ],
+    "products": [
+        ("product_id", "STRING"), ("name", "STRING"), ("category", "STRING"),
+        ("brand", "STRING"), ("price", "DOUBLE"), ("stock_quantity", "INT"),
+        ("aisle", "INT"), ("unit", "STRING"),
+    ],
+    "stores": [
+        ("store_id", "STRING"), ("name", "STRING"), ("address", "STRING"),
+        ("city", "STRING"), ("state", "STRING"), ("zip_code", "STRING"),
+        ("hours", "STRING"), ("phone", "STRING"),
+    ],
+    "transactions": [
+        ("transaction_id", "STRING"), ("customer_id", "STRING"), ("store_id", "STRING"),
+        ("transaction_date", "STRING"), ("total_amount", "DOUBLE"),
+        ("payment_method", "STRING"), ("status", "STRING"),
+    ],
+    "transaction_items": [
+        ("item_id", "STRING"), ("transaction_id", "STRING"), ("product_id", "STRING"),
+        ("quantity", "DOUBLE"), ("unit_price", "DOUBLE"), ("discount", "DOUBLE"),
+    ],
+    "payment_history": [
+        ("payment_id", "STRING"), ("customer_id", "STRING"), ("payment_method", "STRING"),
+        ("card_last4", "STRING"), ("billing_address", "STRING"), ("created_date", "STRING"),
+    ],
 }
 
 MEMBERSHIP_TIERS = ["Freshman", "Sophomore", "Junior", "Senior"]
@@ -127,7 +162,7 @@ def random_zip():
     return f"{random.randint(10000, 99999)}"
 
 
-def generate(spark, full_schema: str, seed: int = 42) -> list[str]:
+def generate(seed: int = 42, **_ignored) -> list[TableData]:
     random.seed(seed)
     # ── 1. Customers ───────────────────────────────────────────────────
     print("Generating customers...")
@@ -156,9 +191,7 @@ def generate(spark, full_schema: str, seed: int = 42) -> list[str]:
             "preferences": json.dumps(prefs),
         })
 
-    customers_df = spark.createDataFrame(customers)
-    customers_df.write.mode("overwrite").saveAsTable(f"{full_schema}.customers")
-    print(f"  Wrote {customers_df.count()} customers")
+    print(f"  Generated {len(customers)} customers")
 
     # ── 2. Products ─────────────────────────────────────────────────────
     print("Generating products...")
@@ -200,9 +233,7 @@ def generate(spark, full_schema: str, seed: int = 42) -> list[str]:
         })
         pid += 1
 
-    products_df = spark.createDataFrame(products)
-    products_df.write.mode("overwrite").saveAsTable(f"{full_schema}.products")
-    print(f"  Wrote {products_df.count()} products")
+    print(f"  Generated {len(products)} products")
 
     # ── 3. Stores ───────────────────────────────────────────────────────
     print("Generating stores...")
@@ -220,9 +251,7 @@ def generate(spark, full_schema: str, seed: int = 42) -> list[str]:
             "phone": random_phone(),
         })
 
-    stores_df = spark.createDataFrame(stores)
-    stores_df.write.mode("overwrite").saveAsTable(f"{full_schema}.stores")
-    print(f"  Wrote {stores_df.count()} stores")
+    print(f"  Generated {len(stores)} stores")
 
     # ── 4. Transactions + Transaction Items ─────────────────────────────
     print("Generating transactions and transaction items...")
@@ -269,13 +298,7 @@ def generate(spark, full_schema: str, seed: int = 42) -> list[str]:
             "status": random.choices(["completed", "refunded", "pending"], weights=[90, 7, 3])[0],
         })
 
-    transactions_df = spark.createDataFrame(transactions)
-    transactions_df.write.mode("overwrite").saveAsTable(f"{full_schema}.transactions")
-    print(f"  Wrote {transactions_df.count()} transactions")
-
-    transaction_items_df = spark.createDataFrame(transaction_items)
-    transaction_items_df.write.mode("overwrite").saveAsTable(f"{full_schema}.transaction_items")
-    print(f"  Wrote {transaction_items_df.count()} transaction items")
+    print(f"  Generated {len(transactions)} transactions, {len(transaction_items)} items")
 
     # ── 5. Payment History ──────────────────────────────────────────────
     print("Generating payment history...")
@@ -293,9 +316,14 @@ def generate(spark, full_schema: str, seed: int = 42) -> list[str]:
             "created_date": (datetime(2024, 1, 1) + timedelta(days=random.randint(0, 440))).strftime("%Y-%m-%d"),
         })
 
-    payment_history_df = spark.createDataFrame(payment_history)
-    payment_history_df.write.mode("overwrite").saveAsTable(f"{full_schema}.payment_history")
-    print(f"  Wrote {payment_history_df.count()} payment records")
+    print(f"  Generated {len(payment_history)} payment records")
 
-    print("\nAll tables created successfully in", full_schema)
-    return TABLES
+    data = {
+        "customers": customers,
+        "products": products,
+        "stores": stores,
+        "transactions": transactions,
+        "transaction_items": transaction_items,
+        "payment_history": payment_history,
+    }
+    return [TableData(name=t, columns=COLUMNS[t], rows=data[t]) for t in TABLES]

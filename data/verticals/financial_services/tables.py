@@ -1,6 +1,6 @@
 """Meridian Capital Partners — financial services tables for workshop demo.
 
-All workshop tables are written to {catalog}.{schema} from 01_quickstart_setup.py widgets.
+All workshop tables are written to {catalog}.{schema} from the setup entrypoints.
 
 Real market data (daily prices and company profiles for 29 tickers, 1999-2023)
 ships with the repo as CSVs in the market_data/ folder — a one-time export of
@@ -11,16 +11,22 @@ First-party data is driven by that real market data: a simulated BUY/SELL trade
 ledger is generated per account on real trading dates at real closing prices,
 and portfolio holdings, P&L, and cash balances are all derived from that
 ledger — so every number reconciles with `trades` and `dailyprice`.
+
+This module is Spark-free: it parses the bundled CSVs and computes the price
+history / shock analysis in pure Python, returning ``TableData`` objects that
+either writer (Spark on a cluster, or SQL REST API from a laptop) can persist.
 """
 
 import csv
 import gzip
 import json
 import random
+from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from lib.demo_names import CITIES_STATES, FIRST_NAMES, LAST_NAMES
+from verticals.base import BundledCsvTable, TableData
 
 MARKET_DATA_DIR = Path(__file__).parent / "market_data"
 DAILY_PRICE_TABLE = "dailyprice"
@@ -38,6 +44,41 @@ TABLE_DESCRIPTIONS = {
     "company_profile": "Reference company attributes and sector/industry metadata for tradable symbols.",
 }
 
+COLUMNS = {
+    "clients": [
+        ("client_id", "STRING"), ("first_name", "STRING"), ("last_name", "STRING"),
+        ("email", "STRING"), ("phone", "STRING"), ("city", "STRING"), ("state", "STRING"),
+        ("country", "STRING"), ("kyc_tier", "STRING"), ("risk_rating", "STRING"),
+        ("onboard_date", "STRING"), ("preferences", "STRING"),
+    ],
+    "accounts": [
+        ("account_id", "STRING"), ("client_id", "STRING"), ("account_type", "STRING"),
+        ("status", "STRING"), ("open_date", "STRING"),
+        ("initial_funding_usd", "DOUBLE"), ("cash_balance_usd", "DOUBLE"),
+    ],
+    "trades": [
+        ("trade_id", "STRING"), ("account_id", "STRING"), ("symbol", "STRING"),
+        ("side", "STRING"), ("trade_date", "STRING"), ("quantity", "INT"),
+        ("execution_price_usd", "DOUBLE"), ("notional_usd", "DOUBLE"),
+    ],
+    "portfolio_holdings": [
+        ("holding_id", "STRING"), ("account_id", "STRING"), ("symbol", "STRING"),
+        ("quantity", "INT"), ("avg_cost_basis_usd", "DOUBLE"), ("realized_pnl_usd", "DOUBLE"),
+        ("market_value_usd", "DOUBLE"), ("unrealized_pnl_usd", "DOUBLE"), ("as_of_date", "STRING"),
+    ],
+    "dailyprice": [
+        ("date", "DATE"), ("open", "DOUBLE"), ("high", "DOUBLE"), ("low", "DOUBLE"),
+        ("close", "DOUBLE"), ("adjClose", "DOUBLE"), ("vol", "DOUBLE"),
+        ("divAmount", "DOUBLE"), ("splitFactor", "DOUBLE"), ("ticker", "STRING"),
+    ],
+    "company_profile": [
+        ("country", "STRING"), ("currency", "STRING"), ("estimateCurrency", "STRING"),
+        ("exchange", "STRING"), ("industry", "STRING"), ("ipo", "DATE"), ("logo", "STRING"),
+        ("marketCap", "DOUBLE"), ("companyName", "STRING"), ("phone", "STRING"),
+        ("sharesOutstanding", "DOUBLE"), ("ticker", "STRING"), ("website", "STRING"),
+    ],
+}
+
 # Tickers the market-news documents cover — always part of the tradable universe
 NEWS_TICKERS = ["AAPL", "TSLA"]
 UNIVERSE_SIZE = 40
@@ -52,23 +93,6 @@ def _phone():
 def _email(first, last):
     domain = random.choice(["meridiancapital.com", "investor.com", "familyoffice.com"])
     return f"{first.lower()}.{last.lower()}@{domain}"
-
-
-def _fqn(catalog: str, schema: str, table: str) -> str:
-    return f"{catalog}.{schema}.{table}"
-
-
-def _resolve_catalog_schema(
-    full_schema: str,
-    catalog: str | None,
-    schema: str | None,
-) -> tuple[str, str]:
-    if catalog and schema:
-        return catalog, schema
-    parts = full_schema.split(".", 1)
-    if len(parts) != 2 or not parts[0] or not parts[1]:
-        raise ValueError(f"full_schema must be catalog.schema, got '{full_schema}'")
-    return parts[0], parts[1]
 
 
 # How the CSV export renders NULL/NaN values
@@ -95,87 +119,74 @@ def _read_csv_rows(path: Path) -> list[list[str]]:
         return list(reader)
 
 
-def _load_bundled_market_data(spark, catalog: str, schema: str) -> None:
-    """Load the bundled market-data CSVs into the workshop schema."""
-    dailyprice_path = MARKET_DATA_DIR / "dailyprice.csv.gz"
-    profile_path = MARKET_DATA_DIR / "company_profile.csv"
-    for path in (dailyprice_path, profile_path):
-        if not path.exists():
-            raise FileNotFoundError(
-                f"Bundled market data file missing: {path}. "
-                "It ships with the repo under data/verticals/financial_services/market_data/."
-            )
+def _parse_daily_rows() -> list[dict]:
+    """Parse the bundled dailyprice CSV into typed dict rows (full history)."""
+    path = MARKET_DATA_DIR / "dailyprice.csv"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Bundled market data file missing: {path}. "
+            "It ships with the repo under data/verticals/financial_services/market_data/."
+        )
+    names = [c for c, _ in COLUMNS["dailyprice"]]
+    rows = []
+    for r in _read_csv_rows(path):
+        values = [_to_date(r[0]), *(_to_float(v) for v in r[1:9]), _to_str(r[9])]
+        rows.append(dict(zip(names, values)))
+    return rows
 
-    daily_rows = [
-        (_to_date(r[0]), *(_to_float(v) for v in r[1:9]), _to_str(r[9]))
-        for r in _read_csv_rows(dailyprice_path)
-    ]
-    daily_schema = (
-        "date DATE, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, "
-        "adjClose DOUBLE, vol DOUBLE, divAmount DOUBLE, splitFactor DOUBLE, ticker STRING"
-    )
-    target = _fqn(catalog, schema, DAILY_PRICE_TABLE)
-    spark.createDataFrame(daily_rows, schema=daily_schema).write.mode("overwrite").saveAsTable(target)
-    print(f"Created {target} — {len(daily_rows):,} rows (bundled market data CSV)")
 
-    profile_rows = [
-        (
+def _parse_profile_rows() -> list[dict]:
+    """Parse the bundled company_profile CSV into typed dict rows."""
+    path = MARKET_DATA_DIR / "company_profile.csv"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Bundled market data file missing: {path}. "
+            "It ships with the repo under data/verticals/financial_services/market_data/."
+        )
+    names = [c for c, _ in COLUMNS["company_profile"]]
+    rows = []
+    for r in _read_csv_rows(path):
+        values = [
             _to_str(r[0]), _to_str(r[1]), _to_str(r[2]), _to_str(r[3]), _to_str(r[4]),
             _to_date(r[5]), _to_str(r[6]), _to_float(r[7]), _to_str(r[8]), _to_str(r[9]),
             _to_float(r[10]), _to_str(r[11]), _to_str(r[12]),
-        )
-        for r in _read_csv_rows(profile_path)
-    ]
-    profile_schema = (
-        "country STRING, currency STRING, estimateCurrency STRING, exchange STRING, "
-        "industry STRING, ipo DATE, logo STRING, marketCap DOUBLE, companyName STRING, "
-        "phone STRING, sharesOutstanding DOUBLE, ticker STRING, website STRING"
-    )
-    target = _fqn(catalog, schema, COMPANY_PROFILE_TABLE)
-    spark.createDataFrame(profile_rows, schema=profile_schema).write.mode("overwrite").saveAsTable(target)
-    print(f"Created {target} — {len(profile_rows):,} rows (bundled market data CSV)")
+        ]
+        rows.append(dict(zip(names, values)))
+    return rows
 
 
-def _load_price_history(spark, catalog: str, schema: str) -> dict[str, list[tuple[str, float]]]:
-    """Load (date, close) series per ticker from the loaded dailyprice table.
+def _price_history(daily_rows: list[dict]) -> dict[str, list[tuple[str, float]]]:
+    """Build (date_str, close) series per ticker from parsed dailyprice rows.
 
-    Limits to the most-traded UNIVERSE_SIZE tickers (always including NEWS_TICKERS)
-    so the simulation works on a manageable, liquid universe.
+    Mirrors the previous Spark query: keep tickers with a valid name, a positive
+    close, and at least MIN_HISTORY_DAYS of history; limit to the most-traded
+    UNIVERSE_SIZE tickers (always including NEWS_TICKERS).
     """
-    daily = _fqn(catalog, schema, DAILY_PRICE_TABLE)
-    counts = spark.sql(
-        f"""
-        SELECT ticker, COUNT(*) AS n
-        FROM {daily}
-        WHERE ticker IS NOT NULL AND ticker NOT IN ('NaN', 'nan', '')
-          AND close IS NOT NULL AND close > 0
-        GROUP BY ticker
-        HAVING COUNT(*) >= {MIN_HISTORY_DAYS}
-        ORDER BY n DESC, ticker
-        """
-    ).collect()
+    series: dict[str, list[tuple[str, float]]] = defaultdict(list)
+    for row in daily_rows:
+        ticker = row["ticker"]
+        close = row["close"]
+        date = row["date"]
+        if not ticker or ticker in ("NaN", "nan", ""):
+            continue
+        if close is None or close <= 0 or date is None:
+            continue
+        series[ticker].append((date.isoformat(), close))
+
+    counts = {t: len(s) for t, s in series.items() if len(s) >= MIN_HISTORY_DAYS}
     if not counts:
         raise ValueError(
-            f"No tickers with enough history in {daily}. "
-            "The bundled CSV at data/verticals/financial_services/market_data/dailyprice.csv.gz "
+            "No tickers with enough history in the bundled dailyprice CSV. "
+            "The file at data/verticals/financial_services/market_data/dailyprice.csv "
             "may be missing or corrupt — re-sync the repo and re-run setup."
         )
-    symbols = [r["ticker"] for r in counts]
+    symbols = sorted(counts, key=lambda t: (-counts[t], t))
     universe = [t for t in NEWS_TICKERS if t in symbols]
     universe += [t for t in symbols if t not in universe][: UNIVERSE_SIZE - len(universe)]
 
-    in_list = ", ".join(f"'{t}'" for t in universe)
-    rows = spark.sql(
-        f"""
-        SELECT ticker, CAST(date AS STRING) AS date, CAST(close AS DOUBLE) AS close
-        FROM {daily}
-        WHERE ticker IN ({in_list}) AND close IS NOT NULL AND close > 0
-        ORDER BY ticker, date
-        """
-    ).collect()
     prices: dict[str, list[tuple[str, float]]] = {}
-    for r in rows:
-        prices.setdefault(r["ticker"], []).append((r["date"], float(r["close"])))
+    for ticker in universe:
+        prices[ticker] = sorted(series[ticker], key=lambda x: x[0])
     return prices
 
 
@@ -338,26 +349,16 @@ def _derive_holdings(
     return holdings
 
 
-def _save(spark, catalog: str, schema: str, table, rows):
-    fqn = _fqn(catalog, schema, table)
-    spark.createDataFrame(rows).write.mode("overwrite").saveAsTable(fqn)
-    print(f"Created {fqn} — {len(rows)} rows")
-
-
-def generate(
-    spark,
-    full_schema: str,
-    seed: int = 42,
-    catalog: str | None = None,
-    schema: str | None = None,
-) -> list[str]:
-    catalog, schema = _resolve_catalog_schema(full_schema, catalog, schema)
+def generate(seed: int = 42, **_ignored) -> list[TableData]:
     random.seed(seed)
     rng = random.Random(seed + 1)
 
-    # Land the bundled 3rd-party market data in the target schema first.
-    _load_bundled_market_data(spark, catalog, schema)
-    prices = _load_price_history(spark, catalog, schema)
+    # Parse the bundled 3rd-party market data (full history) in pure Python.
+    daily_rows = _parse_daily_rows()
+    profile_rows = _parse_profile_rows()
+    print(f"Loaded bundled market data: {len(daily_rows):,} daily prices, {len(profile_rows)} profiles")
+
+    prices = _price_history(daily_rows)
     universe = sorted(prices)
     shocks = _shock_days(prices)
     latest_closes = {t: series[-1] for t, series in prices.items()}
@@ -385,8 +386,8 @@ def generate(
                 "esg_screen": random.choice([True, False]),
             }),
         })
-    _save(spark, catalog, schema, "clients", clients)
     risk_by_client = {c["client_id"]: c["risk_rating"] for c in clients}
+    print(f"  Generated {len(clients)} clients")
 
     accounts = []
     for acc_id in range(1, 201):
@@ -417,23 +418,23 @@ def generate(
         all_trades.extend(trades)
         positions_by_account[account["account_id"]] = positions
         account["cash_balance_usd"] = round(cash, 2)
-    _save(spark, catalog, schema, "accounts", accounts)
+    print(f"  Generated {len(accounts)} accounts")
 
     all_trades.sort(key=lambda t: (t["trade_date"], t["account_id"], t["symbol"]))
     for i, trade in enumerate(all_trades, 1):
         trade["trade_id"] = f"TRD-{i:07d}"
-    _save(spark, catalog, schema, "trades", all_trades)
+    print(f"  Generated {len(all_trades)} trades")
 
     holdings = _derive_holdings(positions_by_account, latest_closes)
-    _save(spark, catalog, schema, "portfolio_holdings", holdings)
+    print(f"  Generated {len(holdings)} holdings")
 
-    ws = f"{catalog}.{schema}"
-    print(
-        f"All tables in {ws}: {', '.join(TABLES)}\n"
-        f"Example join:\n"
-        f"  SELECT t.trade_date, t.side, t.quantity, t.execution_price_usd, d.close, c.industry\n"
-        f"  FROM {ws}.trades t\n"
-        f"  JOIN {ws}.dailyprice d ON t.symbol = d.ticker AND t.trade_date = CAST(d.date AS STRING)\n"
-        f"  JOIN {ws}.company_profile c ON t.symbol = c.ticker"
-    )
-    return TABLES
+    first_party = {
+        "clients": clients,
+        "accounts": accounts,
+        "trades": all_trades,
+        "portfolio_holdings": holdings,
+    }
+    result = [TableData(name=t, columns=COLUMNS[t], rows=first_party[t]) for t in FIRST_PARTY_TABLES]
+    result.append(BundledCsvTable(DAILY_PRICE_TABLE, COLUMNS["dailyprice"], daily_rows))
+    result.append(BundledCsvTable(COMPANY_PROFILE_TABLE, COLUMNS["company_profile"], profile_rows))
+    return result

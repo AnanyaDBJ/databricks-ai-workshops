@@ -1,0 +1,6 @@
+# Dependencies for the local CLI setup (local_cli_setup_script/setup.py).
+# The workspace notebook runs on a Databricks cluster and only needs
+# databricks-ai-search (installed via %pip in the notebook).
+databricks-sdk>=0.40
+databricks-ai-search>=0.76  # formerly databricks-vectorsearch (now a deprecated shim)
+mlflow>=3.0
