@@ -46,8 +46,9 @@
 
 import sys
 
+
 _notebook_path = dbutils.entry_point.getDbutils().notebook().getContext().notebookPath().get()
-_data_root = "/Workspace" + "/".join(_notebook_path.split("/")[:-1])
+_data_root = "/Workspace" + "/".join(_notebook_path.split("/")[:-2])
 if _data_root not in sys.path:
     sys.path.insert(0, _data_root)
 
