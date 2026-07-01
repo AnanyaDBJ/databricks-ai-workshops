@@ -1,8 +1,26 @@
-# Data Setup
+# Workshop Data Setup
 
 > **This is the first step for all workshop levels.** Complete this setup before starting any workshop (Simple, Medium, or Advanced).
 
-This creates the shared dataset that all workshop levels depend on: retail data tables, chunked policy documents, a Vector Search index, a Genie Space, and an MLflow experiment.
+This creates the shared dataset that every workshop level depends on: industry data tables, chunked documents, a Vector Search index, a Genie Space, and an MLflow experiment — all in a Unity Catalog schema you choose.
+
+You pick **one industry** to set up:
+
+| Industry | Brand | Data tables | Documents |
+|----------|-------|-------------|-----------|
+| `education` (default) | EduPath Academy | `customers`, `products`, `stores`, `transactions`, `transaction_items`, `payment_history` (school semantics) | course/policy docs |
+| `retail` | FreshMart | Same six tables (grocery semantics) | store policy docs |
+| `financial_services` | Meridian Capital Partners | `clients`, `accounts`, `trades`, `portfolio_holdings`, `dailyprice`, `company_profile` | market-shock news articles |
+
+---
+
+## Before you start
+
+Both setup paths write data through a **SQL warehouse**, so you need:
+
+- A **running SQL warehouse** (Compute → SQL Warehouses in Databricks)
+- **Unity Catalog** access — permission to create a catalog/schema and tables
+- A workspace with **Vector Search** and the **Foundation Model API** enabled
 
 ---
 
@@ -10,16 +28,16 @@ This creates the shared dataset that all workshop levels depend on: retail data 
 
 | Path | Best for | Time |
 |------|----------|------|
-| **[Path A: Local CLI](#path-a-local-cli)** | Local development, running the advanced workshop locally | ~15 min |
-| **[Path B: Workspace Notebook](#path-b-workspace-notebook)** | Everything inside Databricks, no local tools needed | ~15 min |
+| **[Path A: Local CLI](#path-a-local-cli)** | Running setup from your laptop | ~15 min |
+| **[Path B: Workspace Notebook](#path-b-workspace-notebook)** | Everything inside Databricks, no local tools | ~15 min |
 
-Both paths produce the exact same result. Pick one.
+Both paths run the **same code** and produce the **same result**. Pick one.
 
 ---
 
 ## Path A: Local CLI
 
-Run these scripts from your local machine. They connect to your Databricks workspace via the CLI.
+Run one command from your laptop. It connects to your Databricks workspace via the CLI.
 
 ### Prerequisites
 
@@ -27,11 +45,6 @@ Run these scripts from your local machine. They connect to your Databricks works
 |------|---------|
 | Databricks CLI | `brew tap databricks/tap && brew install databricks` |
 | Python 3.9+ | [python.org](https://www.python.org/downloads/) |
-| jq | `brew install jq` |
-
-You also need:
-- A **running SQL warehouse** (Compute > SQL Warehouses in Databricks)
-- **Unity Catalog** access (permission to create tables)
 
 ### Step 0: Clone the repository
 
@@ -42,103 +55,67 @@ cd databricks-ai-workshops
 
 ### Step 1: Authenticate
 
+Point the CLI at the **specific workspace** you want to set up. Teams often stand up a dedicated workshop workspace, so don't assume the default — use that workspace's URL:
+
 ```bash
-databricks auth login --profile DEFAULT
+databricks auth login --host https://<your-workspace-url> --profile DEFAULT
 ```
 
-Follow the browser prompts. Verify it worked:
+Replace `<your-workspace-url>` with your workspace host (e.g. `dbc-a1b2c3d4-e5f6.cloud.databricks.com` or `adb-1234567890.11.azuredatabricks.net`).
+
+Follow the browser prompts, then verify you're connected to the right workspace:
 
 ```bash
 databricks current-user me --profile DEFAULT
 ```
 
-### Step 2: Find your warehouse ID
+### Step 2: Install dependencies
 
 ```bash
-databricks warehouses list --profile DEFAULT --output json | jq -r '.[] | "\(.id)  \(.name)  \(.state)"'
+cd data
+pip install -r requirements.txt
 ```
 
-Pick a warehouse that shows `RUNNING`. Copy its ID.
-
-### Step 3: Create catalog and schema
-
-Run in the Databricks SQL Editor, or via CLI:
+### Step 3: Run setup (one command)
 
 ```bash
-databricks api post /api/2.0/sql/statements \
-  --profile DEFAULT \
-  --json '{
-    "warehouse_id": "<WAREHOUSE-ID>",
-    "statement": "CREATE CATALOG IF NOT EXISTS <CATALOG>; CREATE SCHEMA IF NOT EXISTS <CATALOG>.<SCHEMA>;"
-  }'
-```
-
-Replace `<CATALOG>` and `<SCHEMA>` with your chosen names (e.g., `my_catalog` and `retail_agent`).
-
-### Step 4: Generate retail data tables
-
-From the repository root:
-
-```bash
-python data/local_cli_setup_script/execute_sql.py \
-  --profile DEFAULT \
-  --warehouse-id <WAREHOUSE-ID> \
+python local_cli_setup_script/setup.py \
+  --industry retail \
   --catalog <CATALOG> \
-  --schema <SCHEMA>
+  --schema <SCHEMA> \
+  --profile DEFAULT
 ```
 
-This creates 6 tables: `customers`, `products`, `stores`, `transactions`, `transaction_items`, `payment_history`.
+Replace `<CATALOG>` and `<SCHEMA>` with names you choose (e.g. `my_catalog` and `retail_agent`). Swap `--industry` for `education` or `financial_services` if you prefer. The first available SQL warehouse is auto-detected (a running one is preferred) — pass `--warehouse-id <id>` only to pin a specific warehouse (find IDs with `databricks warehouses list --profile DEFAULT`).
 
-### Step 5: Generate policy document chunks
+This creates the catalog and schema, then all six setup steps: data tables, chunked documents, the Vector Search endpoint + index, a Genie Space, and an MLflow experiment. The Vector Search step takes 5–10 minutes to provision.
 
-```bash
-python data/local_cli_setup_script/execute_chunking.py \
-  --profile DEFAULT \
-  --warehouse-id <WAREHOUSE-ID> \
-  --catalog <CATALOG> \
-  --schema <SCHEMA>
-```
+> **Data only?** Add `--skip-vector-search`, `--skip-genie`, and/or `--skip-mlflow` to skip those steps.
 
-This chunks 7 policy documents into the `policy_docs_chunked` table for Vector Search.
-
-### Step 6: Create Vector Search index + Genie Space
-
-```bash
-python data/local_cli_setup_script/create_resources.py \
-  --profile DEFAULT \
-  --warehouse-id <WAREHOUSE-ID> \
-  --catalog <CATALOG> \
-  --schema <SCHEMA>
-```
-
-This takes 5-10 minutes (Vector Search endpoint provisioning). When done, it prints:
+When it finishes it prints a summary:
 
 ```
-============================================================
-SUMMARY
-============================================================
-  Vector Search Endpoint: <endpoint-name>
-  Vector Search Index:    <CATALOG>.<SCHEMA>.policy_docs_index
-  Genie Space ID:         01ef...abcd
-
-Add these to your advanced/.env file:
-  VECTOR_SEARCH_INDEX=<CATALOG>.<SCHEMA>.policy_docs_index
-  GENIE_SPACE_ID=01ef...abcd
+======================================================================
+  WORKSHOP SETUP COMPLETE
+======================================================================
+  Catalog/Schema:          my_catalog.retail_agent
+  Vector Search index:     my_catalog.retail_agent.policy_docs_index
+  Genie Space ID:          01ef...abcd
+  MLflow experiment:       /Users/you@co.com/... (ID: 1234567890123456)
+======================================================================
 ```
 
-**Save these values** — you'll need them in your workshop level's configuration step.
+**Save the Vector Search index, Genie Space ID, and MLflow experiment** — your workshop level asks for them.
 
 ### Done!
 
-You now have everything ready. Go to your workshop level:
+Go to your workshop level:
 
 | Level | Next step |
 |-------|-----------|
 | Simple (L100) | [`simple/LAB_GUIDE.md`](../simple/LAB_GUIDE.md) |
-| Medium (L200) — Local | [`medium/WORKSHOP_INSTRUCTIONS.md`](../medium/WORKSHOP_INSTRUCTIONS.md) |
-| Medium (L200) — Workspace | [`medium/WORKSHOP_INSTRUCTIONS_WORKSPACE.md`](../medium/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
-| Advanced (L300) — Local | [`advanced/WORKSHOP_INSTRUCTIONS.md`](../advanced/WORKSHOP_INSTRUCTIONS.md) |
-| Advanced (L300) — Workspace | [`advanced/WORKSHOP_INSTRUCTIONS_WORKSPACE.md`](../advanced/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
+| Medium (L200) | [`medium/lab_instructions/SETUP_GUIDE.md`](../medium/lab_instructions/SETUP_GUIDE.md) |
+| Advanced (L300) | [`advanced/WORKSHOP_INSTRUCTIONS.md`](../advanced/WORKSHOP_INSTRUCTIONS.md) |
 
 ---
 
@@ -146,27 +123,23 @@ You now have everything ready. Go to your workshop level:
 
 Run everything inside Databricks — no local tools needed.
 
-### Prerequisites
-
-- A Databricks workspace with **Unity Catalog**, **Vector Search**, and **Foundation Model API** enabled
-- A **running SQL warehouse** (Compute > SQL Warehouses)
-
 ### Step 0: Import the repository into your workspace
 
-1. In the left sidebar, click **Workspace** > **Repos** (or "Git Folders")
-2. Click **Add** > **Git Folder**
+1. In the left sidebar, click **Workspace** → **Repos** (or "Git Folders")
+2. Click **Add** → **Git Folder**
 3. Paste the URL: `https://github.com/AnanyaDBJ/databricks-ai-workshops.git`
 4. Click **Create Git Folder**
 
 ### Step 1: Open the notebook
 
-Navigate to `data/workspace_setup_script/01_quickstart_setup.py` in the workspace file browser and open it.
+Navigate to `data/workspace_setup_script/01_quickstart_setup.py` and open it.
 
 ### Step 2: Configure and run
 
-1. At the top, select your **catalog** and **schema** from the dropdown widgets
-2. Click **Run All**
-3. Wait ~10-15 minutes (most time is Vector Search endpoint provisioning)
+1. At the top, set the **Industry**, **Catalog**, and **Schema** widgets.
+2. Click **Run All** and wait ~10–15 minutes (most of the time is Vector Search provisioning). The first available SQL warehouse is auto-detected.
+
+> The notebook writes data through a SQL warehouse (not Spark), so make sure one is running.
 
 ### Step 3: Copy the output values
 
@@ -177,41 +150,39 @@ When complete, the notebook prints a summary:
   WORKSHOP SETUP COMPLETE
 ======================================================================
   Catalog/Schema:        my_catalog.retail_agent
-
   Vector Search Index:   my_catalog.retail_agent.policy_docs_index
   Genie Space ID:        01ef...abcd
   MLflow Experiment ID:  1234567890123456
 ======================================================================
 ```
 
-**Save these values** — you'll need them in your workshop level's configuration step.
+**Save these values** — your workshop level asks for them.
 
 ### Done!
 
-You now have everything ready. Go to your workshop level:
+Go to your workshop level:
 
 | Level | Next step |
 |-------|-----------|
 | Simple (L100) | [`simple/LAB_GUIDE.md`](../simple/LAB_GUIDE.md) |
-| Medium (L200) — Workspace | [`medium/WORKSHOP_INSTRUCTIONS_WORKSPACE.md`](../medium/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
-| Advanced (L300) — Workspace | [`advanced/WORKSHOP_INSTRUCTIONS_WORKSPACE.md`](../advanced/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
+| Medium (L200) | [`medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md`](../medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md) |
+| Advanced (L300) | [`advanced/WORKSHOP_INSTRUCTIONS.md`](../advanced/WORKSHOP_INSTRUCTIONS.md) |
 
 ---
 
 ## What You Now Have
 
+Every industry produces the same kinds of resources in `{catalog}.{schema}`:
+
 | Resource | Description |
 |----------|-------------|
-| `customers` table | 200 synthetic customers |
-| `products` table | ~500 retail products |
-| `stores` table | 10 store locations |
-| `transactions` table | 2,000 transactions |
-| `transaction_items` table | ~8,000 line items |
-| `payment_history` table | 400 payment records |
-| `policy_docs_chunked` table | Policy documents split into searchable chunks |
-| Vector Search index | Semantic search over policy documents |
-| Genie Space | Natural language querying of retail data |
-| MLflow Experiment | Agent tracing and evaluation |
+| Data tables | Six industry tables (see the table at the top) |
+| Document chunk table | Source documents split into searchable chunks |
+| Vector Search index | Semantic search over the documents |
+| Genie Space | Natural-language querying of your data tables |
+| MLflow experiment | Agent tracing and evaluation |
+
+For example, `retail` creates ~200 customers, ~500 products, 10 stores, 2,000 transactions, ~10,000 transaction line items, and 400 payment records, plus the chunked store-policy docs and a `policy_docs_index`. `financial_services` instead loads clients, accounts, a trade ledger, portfolio holdings, and bundled market data (`dailyprice`, `company_profile`), with a `market_news_index` over historical market-shock articles.
 
 ---
 
@@ -219,56 +190,13 @@ You now have everything ready. Go to your workshop level:
 
 | Issue | Fix |
 |-------|-----|
-| `JSONDecodeError` or auth errors | Auth expired — run `databricks auth login --profile DEFAULT` |
-| `create_resources.py` times out | VS endpoint can take 10+ min — re-run, it's idempotent |
-| Vector Search index shows "Syncing" | Normal — wait 5-10 min after creation for initial sync |
-| Notebook widget doesn't show catalogs | Ensure your cluster has Unity Catalog access |
-| `WAREHOUSE_NOT_FOUND` | Start a SQL warehouse first (Compute > SQL Warehouses) |
+| `JSONDecodeError` or auth errors | Auth expired — run `databricks auth login --host https://<your-workspace-url> --profile DEFAULT` again |
+| No SQL warehouse found / `WAREHOUSE_NOT_FOUND` | Start a SQL warehouse (Compute → SQL Warehouses), then re-run. The CLI also accepts `--warehouse-id <id>` to pin a specific warehouse |
+| Vector Search step times out | The endpoint can take 10+ minutes — re-run, setup is idempotent |
+| Vector Search index shows "Syncing" | Normal — wait 5–10 minutes after creation for the initial sync |
+| Notebook widget doesn't list catalogs | Ensure your workspace/cluster has Unity Catalog access |
+| Want to start over | Re-run setup — tables are recreated and resources are reused/refreshed |
 
 ---
 
-## Technical Reference
-
-### Folder structure
-
-```
-data/
-├── README.md                              ← you are here
-├── policy_docs/                           # Source markdown policy documents (7 files)
-│   ├── customer_service_guidelines.md
-│   ├── delivery_pickup_procedures.md
-│   ├── membership_loyalty_program.md
-│   ├── privacy_policy.md
-│   ├── product_safety_recalls.md
-│   ├── return_refund_policy.md
-│   └── store_operating_procedures.md
-├── local_cli_setup_script/                # Scripts that run from your local machine
-│   ├── execute_sql.py                     # Generate structured tables via SQL REST API
-│   ├── execute_chunking.py                # Chunk policy docs via SQL REST API
-│   └── create_resources.py                # Create Vector Search + Genie Space
-└── workspace_setup_script/                # Databricks notebook (does everything on-cluster)
-    └── 01_quickstart_setup.py
-```
-
-### Script arguments
-
-All local CLI scripts accept the same arguments:
-
-| Argument | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `--warehouse-id` | Yes | — | SQL warehouse ID |
-| `--catalog` | Yes | — | Unity Catalog name |
-| `--schema` | Yes | — | Schema name |
-| `--profile` | No | `DEFAULT` | Databricks CLI profile |
-
-`create_resources.py` also accepts:
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--vs-endpoint-name` | auto-generated | Vector Search endpoint name |
-| `--vs-index-name` | `policy_docs_index` | Vector Search index name |
-
-### Notes
-
-- All scripts use `random.seed(42)` for reproducibility
-- `create_resources.py` is idempotent — safe to re-run if interrupted
-- Scripts can be run from any directory (paths resolve relative to the script file)
+Both paths are idempotent and use a fixed random seed, so re-running produces the same dataset.
