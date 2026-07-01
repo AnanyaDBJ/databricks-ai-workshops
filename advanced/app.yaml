@@ -13,12 +13,11 @@ env:
     value: "300"
   - name: MLFLOW_EXPERIMENT_ID
     valueFrom: experiment
-  # TODO: Replace with your Lakebase instance name
-  - name: LAKEBASE_INSTANCE_NAME
-    valueFrom: lakebase_memory # injects hostname → resolved by code
-  # TODO: Replace with your Genie Space ID
+  - name: LAKEBASE_AUTOSCALING_PROJECT
+    value: "l300-workshop-smoke-test"
+  - name: LAKEBASE_AUTOSCALING_BRANCH
+    value: "l300-workshop-smoke-test-branch"
   - name: GENIE_SPACE_ID
-    valueFrom: retail_grocery_genie # injects space_id
-  # TODO: Replace with your Vector Search index (catalog/schema/index-name)
+    valueFrom: retail_grocery_genie
   - name: VECTOR_SEARCH_INDEX
-    valueFrom: policy_docs_index # injects securable_full_name (dots) → converted by code
+    valueFrom: policy_docs_index

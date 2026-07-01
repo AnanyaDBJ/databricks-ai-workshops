@@ -4,15 +4,23 @@
 
 ---
 
-## Choose Your Level
+## Getting Started
 
-| Level | What You'll Build | Duration | Get Started |
-|-------|-------------------|----------|-------------|
-| **[Simple (L100)](./simple/)** | AI agent using managed Databricks services — Genie, Vector Search, Playground, managed agents. No custom code required. | ~3 hours | [Lab Guide](./simple/LAB_GUIDE.md) |
-| **[Medium (L200)](./medium/)** | Custom agent with OpenAI Agents SDK, MCP tools, Lakebase memory, and full-stack chat UI deployed as a Databricks App. | ~4 hours | [Setup Guide](./medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md) |
-| **[Advanced (L300)](./advanced/)** | Production-grade LangGraph agent with MCP, persistent memory, streaming UI, and comprehensive evaluation suite. | 2 days | [Workshop Instructions](./advanced/WORKSHOP_INSTRUCTIONS.md) |
+### 1. Set up your data (required for all levels)
 
-Each level is self-contained — clone and go.
+**→ [`data/README.md`](./data/README.md)**
+
+This creates the shared dataset (tables, Vector Search index, Genie Space) that all workshop levels depend on. Takes ~15 minutes.
+
+### 2. Pick your level
+
+Each guide is self-contained — pick one and follow it start to finish.
+
+| Level | What You'll Build | Duration | Guide |
+|-------|-------------------|----------|-------|
+| **Simple (L100)** | AI agent using managed Databricks services — Genie, Vector Search, Playground. No custom code. | ~2-3 hours | [Lab Guide](./simple/LAB_GUIDE.md) |
+| **Medium (L200)** | Custom agent with OpenAI Agents SDK, MCP tools, Lakebase memory, and chat UI deployed as a Databricks App. | ~3-4 hours | [Local Guide](./medium/WORKSHOP_INSTRUCTIONS.md) / [Workspace Guide](./medium/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
+| **Advanced (L300)** | Production-grade LangGraph agent with MCP, persistent memory, streaming UI, and evaluation suite. | ~5-6 hours | [Local Guide](./advanced/WORKSHOP_INSTRUCTIONS.md) / [Workspace Guide](./advanced/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
 
 ---
 
@@ -28,27 +36,14 @@ Every level follows the same agent lifecycle:
 
 ---
 
-## Quick Start
-
-```bash
-git clone https://github.com/AnanyaDBJ/databricks-ai-workshops.git
-cd databricks-ai-workshops
-```
-
-Then open the **Get Started** link for your chosen level above.
-
----
-
 ## Repository Structure
 
 ```
+data/            Shared data setup (run this first)
 simple/          L100 — Managed services, no custom code
 medium/          L200 — Custom agent with memory (OpenAI Agents SDK + Lakebase)
 advanced/        L300 — Full custom stack (LangGraph + MCP + React UI)
-data/            Shared setup scripts and synthetic FreshMart data
 ```
-
-See [`data/README.md`](./data/README.md) for details on the data setup that powers all levels.
 
 ---
 

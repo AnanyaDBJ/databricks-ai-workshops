@@ -171,25 +171,34 @@ def load_system_prompt() -> str:
 
 def init_mcp_client(workspace_client: WorkspaceClient) -> DatabricksMultiServerMCPClient:
     host_name = get_databricks_host_from_env()
-    return DatabricksMultiServerMCPClient(
-        [
-            DatabricksMCPServer(
-                name="system-ai",
-                url=f"{host_name}/api/2.0/mcp/functions/system/ai",
-                workspace_client=workspace_client,
-            ),
+    servers = [
+        DatabricksMCPServer(
+            name="system-ai",
+            url=f"{host_name}/api/2.0/mcp/functions/system/ai",
+            workspace_client=workspace_client,
+        ),
+    ]
+    if GENIE_SPACE_ID:
+        servers.append(
             DatabricksMCPServer(
                 name="retail-grocery-genie",
                 url=f"{host_name}/api/2.0/mcp/genie/{GENIE_SPACE_ID}",
                 workspace_client=workspace_client,
-            ),
+            )
+        )
+    else:
+        logger.warning("GENIE_SPACE_ID not set — Genie tool will not be available")
+    if VECTOR_SEARCH_INDEX:
+        servers.append(
             DatabricksMCPServer(
                 name="retail-policy-docs",
                 url=f"{host_name}/api/2.0/mcp/vector-search/{VECTOR_SEARCH_INDEX}",
                 workspace_client=workspace_client,
-            ),
-        ]
-    )
+            )
+        )
+    else:
+        logger.warning("VECTOR_SEARCH_INDEX not set — Vector Search tool will not be available")
+    return DatabricksMultiServerMCPClient(servers)
 
 
 async def init_agent(
@@ -229,6 +238,30 @@ async def invoke_handler(request: ResponsesAgentRequest) -> ResponsesAgentRespon
     return ResponsesAgentResponse(output=outputs, custom_outputs=custom_outputs)
 
 
+def _is_already_exists_error(err: BaseException) -> bool:
+    """Check if an exception (or nested sub-exception) is a duplicate/already-exists error."""
+    err_str = str(err)
+    err_type = type(err).__name__
+    if "UniqueViolation" in err_type or "already exists" in err_str:
+        return True
+    if hasattr(err, "exceptions"):
+        return any(_is_already_exists_error(e) for e in err.exceptions)
+    if err.__cause__:
+        return _is_already_exists_error(err.__cause__)
+    return False
+
+
+async def _safe_setup(obj: Any) -> None:
+    """Call setup() on a checkpointer or store, ignoring 'already exists' errors."""
+    try:
+        await obj.setup()
+    except BaseException as e:
+        if _is_already_exists_error(e):
+            logger.debug(f"Setup tables already exist, continuing: {e}")
+        else:
+            raise
+
+
 @stream()
 async def stream_handler(
     request: ResponsesAgentRequest,
@@ -249,11 +282,15 @@ async def stream_handler(
     }
 
     try:
-        async with AsyncCheckpointSaver(
+        checkpointer = AsyncCheckpointSaver(
             instance_name=LAKEBASE_INSTANCE_NAME,
             project=LAKEBASE_AUTOSCALING_PROJECT,
             branch=LAKEBASE_AUTOSCALING_BRANCH,
-        ) as checkpointer:
+        )
+        await checkpointer._lakebase.open()
+        await _safe_setup(checkpointer)
+
+        try:
             async with AsyncDatabricksStore(
                 instance_name=LAKEBASE_INSTANCE_NAME,
                 project=LAKEBASE_AUTOSCALING_PROJECT,
@@ -261,7 +298,7 @@ async def stream_handler(
                 embedding_endpoint=EMBEDDING_ENDPOINT,
                 embedding_dims=EMBEDDING_DIMS,
             ) as store:
-                await store.setup()
+                await _safe_setup(store)
                 config: dict[str, Any] = {"configurable": {"thread_id": thread_id, "store": store}}
                 if user_id:
                     config["configurable"]["user_id"] = user_id
@@ -275,6 +312,8 @@ async def stream_handler(
                     agent.astream(input_state, config, stream_mode=["updates", "messages"])
                 ):
                     yield event
+        finally:
+            await checkpointer._lakebase.close()
     except Exception as e:
         error_msg = str(e).lower()
         # Check for Lakebase access/connection errors

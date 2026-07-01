@@ -22,48 +22,33 @@ resources:
             value: "300"
           - name: MLFLOW_EXPERIMENT_ID
             value_from: "experiment"
-          # TODO: Replace with your Lakebase autoscaling project and branch
           - name: LAKEBASE_AUTOSCALING_PROJECT
-            value_from: "lakebase_memory_project"
+            value: "l300-workshop-smoke-test"
           - name: LAKEBASE_AUTOSCALING_BRANCH
-            value_from: "lakebase_memory_branch"
-          # TODO: Replace with your Genie Space ID
+            value: "l300-workshop-smoke-test-branch"
           - name: GENIE_SPACE_ID
             value_from: "retail_grocery_genie"
-          # TODO: Replace with your Vector Search index (catalog/schema/index-name)
           - name: VECTOR_SEARCH_INDEX
             value_from: "policy_docs_index"
-          # Prompt Registry: system prompt loaded from Unity Catalog
-          # NOTE: Uses static value (not value_from) — MLflow prompts are not UC securables
-          - name: PROMPT_REGISTRY_NAME
-            value: "<catalog>.<schema>.freshmart_system_prompt"
       # Resources which this app has access to
       resources:
-        # TODO: Replace experiment_id with your MLflow experiment ID
         - name: "experiment"
           experiment:
-            experiment_id: "<your-experiment-id>"
+            experiment_id: "4040511589772447"
             permission: "CAN_MANAGE"
-        # TODO: Replace space_id with your Genie Space ID
         - name: "retail_grocery_genie"
           genie_space:
-            name: "Retail Grocery Data"
-            space_id: "<your-genie-space-id>"
+            name: "Retail Data"
+            space_id: "01f1595900051132b572b1f717285d6f"
             permission: "CAN_RUN"
-        # TODO: Replace with your Lakebase autoscaling project and branch names
-        - name: "lakebase_memory_project"
-          lakebase_autoscaling_project:
-            project_name: "<your-lakebase-project-name>"
+        - name: "postgres"
+          postgres:
+            branch: "projects/l300-workshop-smoke-test/branches/l300-workshop-smoke-test-branch"
+            database: "projects/l300-workshop-smoke-test/branches/l300-workshop-smoke-test-branch/databases/databricks-postgres"
             permission: "CAN_CONNECT_AND_CREATE"
-        - name: "lakebase_memory_branch"
-          lakebase_autoscaling_branch:
-            project_name: "<your-lakebase-project-name>"
-            branch_name: "<your-lakebase-branch-name>"
-            permission: "CAN_CONNECT_AND_CREATE"
-        # TODO: Replace with your Vector Search index full name
         - name: "policy_docs_index"
           uc_securable:
-            securable_full_name: "<catalog>.<schema>.policy_docs_index"
+            securable_full_name: "ai_days_experiment_catalog.retail_agent.policy_docs_index"
             securable_type: "TABLE"
             permission: "SELECT"
 
