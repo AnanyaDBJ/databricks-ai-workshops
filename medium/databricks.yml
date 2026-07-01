@@ -1,6 +1,14 @@
 bundle:
   name: agent_openai_agents_sdk
 
+sync:
+  exclude:
+    - ".databricks"
+    - ".claude"
+    - ".venv"
+    - "node_modules"
+    - "load-test-runs"
+
 resources:
   apps:
     agent_openai_agents_sdk:
@@ -40,7 +48,7 @@ resources:
         - name: 'postgres'
           postgres:
             branch: "projects/<your-project>/branches/production"
-            database: "projects/<your-project>/branches/production/databases/<your-database-id>"
+            database: "projects/<your-project>/branches/production/databases/databricks-postgres"
             permission: 'CAN_CONNECT_AND_CREATE'
 
 targets:

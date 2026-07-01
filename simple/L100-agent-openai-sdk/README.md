@@ -1,12 +1,12 @@
-# L100 Workshop Agent — Getting Started
+# FreshMart Agent — Getting Started
 
-A production-ready AI agent built with the OpenAI Agents SDK, for the fictional company of your chosen industry — **FreshMart** (retail), **EduPath Academy** (education), or **Meridian Capital Partners** (financial services). It answers data questions (via Genie) and looks up documents (via Vector Search).
+A production-ready AI agent for FreshMart grocery chain built with the OpenAI Agents SDK. It answers data questions (via Genie) and looks up store policies (via Vector Search).
 
 ## Prerequisites
 
 Before starting, ensure you have:
 
-1. **Databricks workspace** with resources created by `data/01_quickstart_setup.py` (Genie Space, Vector Search index, MLflow experiment)
+1. **Databricks workspace** with resources created by `01_quickstart_setup.py` (Genie Space, Vector Search index, MLflow experiment)
 2. **uv** — Python package manager ([install](https://docs.astral.sh/uv/getting-started/installation/))
 3. **Node.js 20+** — for the chat UI ([install via nvm](https://github.com/nvm-sh/nvm))
 4. **Databricks CLI** — authenticated to your workspace ([install](https://docs.databricks.com/dev-tools/cli/install.html))
@@ -17,9 +17,7 @@ Before starting, ensure you have:
 # 1. Navigate to this folder
 cd simple/L100-agent-openai-sdk
 
-# 2. Run the setup wizard (handles auth, industry selection, MLflow, .env)
-#    Pick the industry you used in data/01_quickstart_setup.py — the wizard
-#    writes that industry's system prompt and tool URLs into agent.py
+# 2. Run the setup wizard (handles auth, MLflow, .env)
 uv run quickstart
 
 # 3. Start the agent + chat UI
@@ -36,12 +34,11 @@ User (Chat UI on :3000)
   ▼
 Agent Server (FastAPI on :8000)
   │
-  ├── Genie Space ──► Natural language queries over your industry's data
-  │                   (e.g. products & transactions, courses & enrollments,
-  │                    or clients & portfolio holdings)
+  ├── Genie Space ──► Natural language queries over retail data
+  │                   (products, transactions, customers, stores)
   │
-  └── Vector Search ──► Document lookup
-                        (e.g. store policies, academic policies, or market news)
+  └── Vector Search ──► Policy document lookup
+                        (returns, delivery, loyalty, privacy, etc.)
 ```
 
 The agent uses the **OpenAI Agents SDK** with MCP (Model Context Protocol) servers to connect to Databricks tools. All interactions are traced in **MLflow** for observability.
@@ -67,10 +64,6 @@ MODEL = 'workshop-ai-endpoint'  # Change to your AI Gateway endpoint
 ### Change the system prompt
 
 Edit the `SYSTEM_PROMPT` variable in `agent_server/agent.py`.
-
-### Switch industry
-
-Re-run `uv run quickstart` and pick a different industry — it rewrites the marked `# GENERATED` block in `agent_server/agent.py` (name, system prompt, tool URLs) and the Genie grant in `databricks.yml`. Note: this replaces any manual edits inside that block.
 
 ### Add a new tool
 
@@ -126,6 +119,6 @@ If you have Claude Code installed, these skills guide you through common tasks:
 | `uv run quickstart` fails on auth | Run `databricks auth login` manually, then retry |
 | Port 8000 already in use | `lsof -ti :8000 \| xargs kill -9` |
 | Port 3000 already in use | `lsof -ti :3000 \| xargs kill -9` |
-| MCP server connection error | Check that Genie Space and Vector Search index exist (run `data/01_quickstart_setup.py` first) |
+| MCP server connection error | Check that Genie Space and Vector Search index exist (run `01_quickstart_setup.py` first) |
 | "App already exists" on deploy | Run `uv run quickstart --app-name <existing-app>` to bind, then deploy |
 | Permission errors after deploy | Ensure resources are listed in `databricks.yml` with correct permissions |
