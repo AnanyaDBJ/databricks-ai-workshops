@@ -6,7 +6,7 @@ Usage:
     python create_resources.py --profile DEFAULT --warehouse-id <id> --catalog <catalog> --schema <schema>
 
 Examples:
-    python create_resources.py --warehouse-id 9a7b09e77b8a8994 --catalog my_catalog --schema retail_agent
+    python create_resources.py --warehouse-id 9a7b09e77b8a8994 --catalog my_catalog --schema edupath_agent
     python create_resources.py --warehouse-id abc123 --catalog demo --schema workshop --vs-endpoint-name my-endpoint
 """
 
@@ -272,12 +272,12 @@ def create_vs_index(host: str, token: str, warehouse_id: str, endpoint_name: str
 
 def create_genie_space(host: str, token: str, warehouse_id: str,
                        catalog: str, schema: str) -> str | None:
-    """Create a Genie Space with the 6 retail tables. Returns the space ID."""
+    """Create a Genie Space with the 6 education tables. Returns the space ID."""
     print(f"\n{'=' * 60}")
     print("Step 3: Genie Space")
     print("=" * 60)
 
-    space_title = f"FreshMart Retail Data ({schema})"
+    space_title = f"EduPath_Academy_Data_({schema})"
     tables = ["customers", "products", "stores", "transactions", "transaction_items", "payment_history"]
     table_identifiers = [f"{catalog}.{schema}.{t}" for t in tables]
 
@@ -304,8 +304,11 @@ def create_genie_space(host: str, token: str, warehouse_id: str,
 
     create_resp = api_request("POST", f"{host}/api/2.0/genie/spaces", token, body={
         "title": space_title,
-        "description": f"FreshMart retail grocery data for natural language queries. "
-                       f"Contains customer, product, store, transaction, and payment data.",
+        "description": (
+            "EduPath Academy education data for natural language queries. "
+            "Contains student information, course catalog, campus locations, "
+            "enrollment history, and tuition payment records."
+        ),
         "warehouse_id": warehouse_id,
         "serialized_space": serialized_space,
     })
@@ -326,26 +329,26 @@ def create_genie_space(host: str, token: str, warehouse_id: str,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Create Vector Search endpoint/index and Genie Space for the FreshMart retail agent.",
+        description="Create Vector Search endpoint/index and Genie Space for the EduPath Academy agent.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python create_resources.py --warehouse-id 9a7b09e77b8a8994 --catalog my_catalog --schema retail_agent
+    python create_resources.py --warehouse-id 9a7b09e77b8a8994 --catalog my_catalog --schema edupath_agent
     python create_resources.py --warehouse-id abc123 --catalog demo --schema workshop --vs-endpoint-name my-vs
         """,
     )
     parser.add_argument("--profile", default="DEFAULT", help="Databricks CLI profile name (default: DEFAULT)")
     parser.add_argument("--warehouse-id", required=True, help="SQL warehouse ID (for Genie and SQL operations)")
     parser.add_argument("--catalog", required=True, help="Unity Catalog name (e.g. my_catalog)")
-    parser.add_argument("--schema", required=True, help="Schema name (e.g. retail_agent)")
+    parser.add_argument("--schema", required=True, help="Schema name (e.g. edupath_agent)")
     parser.add_argument("--vs-endpoint-name", default=None,
-                        help="Vector Search endpoint name (default: freshmart-vs-<schema>)")
+                        help="Vector Search endpoint name (default: edupath-vs-<schema>)")
     parser.add_argument("--vs-index-name", default="policy_docs_index",
                         help="Vector Search index name (default: policy_docs_index)")
     args = parser.parse_args()
 
     # Defaults
-    vs_endpoint = args.vs_endpoint_name or f"freshmart-vs-{args.schema.replace('_', '-')}"
+    vs_endpoint = args.vs_endpoint_name or f"edupath-vs-{args.schema.replace('_', '-')}"
     vs_index_full = f"{args.catalog}.{args.schema}.{args.vs_index_name}"
     source_table = f"{args.catalog}.{args.schema}.policy_docs_chunked"
 

@@ -1,5 +1,5 @@
 """
-Chunk local policy docs and insert into UC table via SQL API for vector search indexing.
+Generate education policy docs, chunk them, and insert into UC table via SQL API for vector search indexing.
 
 Usage:
     python execute_chunking.py --profile DEFAULT --warehouse-id <id> --catalog <catalog> --schema <schema>
@@ -15,7 +15,15 @@ import time
 import urllib.request
 import urllib.error
 
-DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "policy_docs")
+# Import the edu policy doc generator from workspace scripts
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+WORKSPACE_SCRIPT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "workspace_setup_script")
+sys.path.insert(0, WORKSPACE_SCRIPT_DIR)
+
+from generate_edu_policy_docs import generate_docs, EDU_POLICY_DOCS
+
+# Default output directory for generated docs
+DEFAULT_DOCS_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "edu_policy_docs")
 
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
@@ -169,12 +177,12 @@ def esc(s):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Chunk policy docs and insert into UC table for vector search indexing."
+        description="Generate education policy docs and insert into UC table for vector search indexing."
     )
     parser.add_argument("--profile", default="DEFAULT", help="Databricks CLI profile name")
     parser.add_argument("--warehouse-id", required=True, help="SQL warehouse ID")
     parser.add_argument("--catalog", required=True, help="Unity Catalog name (e.g. my_catalog)")
-    parser.add_argument("--schema", required=True, help="Schema name (e.g. retail_agent)")
+    parser.add_argument("--schema", required=True, help="Schema name (e.g. edupath_agent)")
     args = parser.parse_args()
 
     full_schema = f"{args.catalog}.{args.schema}"
@@ -186,12 +194,11 @@ def main():
 
     print(f"Host: {host}")
     print(f"Target table: {target_table}")
-    print(f"Docs dir: {os.path.abspath(DOCS_DIR)}")
 
-    if not os.path.isdir(DOCS_DIR):
-        print(f"ERROR: Policy docs directory not found at: {os.path.abspath(DOCS_DIR)}", file=sys.stderr)
-        print("Expected location: data/policy_docs/ (one level up from this script)", file=sys.stderr)
-        sys.exit(1)
+    # Generate education policy documents
+    print(f"\nGenerating education policy documents...")
+    docs_dir = generate_docs(DEFAULT_DOCS_DIR)
+    print(f"  Created {len(EDU_POLICY_DOCS)} policy documents in: {docs_dir}")
 
     # Create table
     exec_sql(f"""
@@ -204,10 +211,11 @@ def main():
 
     # Read and chunk docs
     all_rows = []
-    for filename in sorted(os.listdir(DOCS_DIR)):
+    print(f"\nReading and chunking policy documents from: {docs_dir}")
+    for filename in sorted(os.listdir(docs_dir)):
         if not filename.endswith(".md"):
             continue
-        filepath = os.path.join(DOCS_DIR, filename)
+        filepath = os.path.join(docs_dir, filename)
         with open(filepath, "r") as f:
             content = f.read()
 

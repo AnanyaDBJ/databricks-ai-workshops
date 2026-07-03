@@ -1,5 +1,5 @@
 """
-Read policy documents from UC Volume, chunk them, and write to a Unity Catalog table
+Read education policy documents from UC Volume, chunk them, and write to a Unity Catalog table
 for vector search indexing.
 
 Usage:
@@ -7,7 +7,7 @@ Usage:
 
 Prerequisites:
     1. Upload policy docs to UC Volume:
-       databricks fs cp ./synthetic_data/policy_docs/ dbfs:/Volumes/ananyaroy/retail_wiab/policy_docs/ --recursive --profile <profile>
+       databricks fs cp ./data/edu_policy_docs/ dbfs:/Volumes/<CATALOG>/<SCHEMA>/policy_docs/ --recursive --profile <profile>
 
 Target table: <CATALOG>.<SCHEMA>.policy_docs_chunked
 """
@@ -19,7 +19,7 @@ from pyspark.sql import SparkSession
 
 # ── Config ──────────────────────────────────────────────────────────
 CATALOG = "qsic_workshop_prep_catalog"
-SCHEMA = "retail_agent"
+SCHEMA = "edupath_agent"
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
 VOLUME_PATH = f"/Volumes/{CATALOG}/{SCHEMA}/policy_docs"
 TARGET_TABLE = f"{FULL_SCHEMA}.policy_docs_chunked"
