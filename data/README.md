@@ -2,7 +2,7 @@
 
 > **This is the first step for all workshop levels.** Complete this setup before starting any workshop (Simple, Medium, or Advanced).
 
-This creates the shared dataset that all workshop levels depend on: retail data tables, chunked policy documents, a Vector Search index, a Genie Space, and an MLflow experiment.
+This creates the shared dataset that all workshop levels depend on: education data tables, chunked policy documents, a Vector Search index, a Genie Space, and an MLflow experiment.
 
 ---
 
@@ -73,9 +73,9 @@ databricks api post /api/2.0/sql/statements \
   }'
 ```
 
-Replace `<CATALOG>` and `<SCHEMA>` with your chosen names (e.g., `my_catalog` and `retail_agent`).
+Replace `<CATALOG>` and `<SCHEMA>` with your chosen names (e.g., `my_catalog` and `edupath_agent`).
 
-### Step 4: Generate retail data tables
+### Step 4: Generate education data tables
 
 From the repository root:
 
@@ -99,7 +99,7 @@ python data/local_cli_setup_script/execute_chunking.py \
   --schema <SCHEMA>
 ```
 
-This chunks 7 policy documents into the `policy_docs_chunked` table for Vector Search.
+This generates 7 education policy documents and chunks them into the `policy_docs_chunked` table for Vector Search.
 
 ### Step 6: Create Vector Search index + Genie Space
 
@@ -176,9 +176,9 @@ When complete, the notebook prints a summary:
 ======================================================================
   WORKSHOP SETUP COMPLETE
 ======================================================================
-  Catalog/Schema:        my_catalog.retail_agent
+  Catalog/Schema:        my_catalog.edupath_agent
 
-  Vector Search Index:   my_catalog.retail_agent.policy_docs_index
+  Vector Search Index:   my_catalog.edupath_agent.policy_docs_index
   Genie Space ID:        01ef...abcd
   MLflow Experiment ID:  1234567890123456
 ======================================================================
@@ -202,15 +202,15 @@ You now have everything ready. Go to your workshop level:
 
 | Resource | Description |
 |----------|-------------|
-| `customers` table | 200 synthetic customers |
-| `products` table | ~500 retail products |
-| `stores` table | 10 store locations |
-| `transactions` table | 2,000 transactions |
-| `transaction_items` table | ~8,000 line items |
-| `payment_history` table | 400 payment records |
+| `customers` table | 200 synthetic students |
+| `products` table | ~500 courses across departments |
+| `stores` table | 10 EduPath campus locations |
+| `transactions` table | 2,000 enrollment records |
+| `transaction_items` table | ~8,000 course enrollment line items |
+| `payment_history` table | 400 tuition payment records |
 | `policy_docs_chunked` table | Policy documents split into searchable chunks |
 | Vector Search index | Semantic search over policy documents |
-| Genie Space | Natural language querying of retail data |
+| Genie Space | Natural language querying of education data |
 | MLflow Experiment | Agent tracing and evaluation |
 
 ---
@@ -234,20 +234,21 @@ You now have everything ready. Go to your workshop level:
 ```
 data/
 ├── README.md                              ← you are here
-├── policy_docs/                           # Source markdown policy documents (7 files)
-│   ├── customer_service_guidelines.md
-│   ├── delivery_pickup_procedures.md
-│   ├── membership_loyalty_program.md
+├── edu_policy_docs/                       # Generated education policy documents (7 files)
+│   ├── academic_integrity.md
+│   ├── attendance_policy.md
+│   ├── course_enrollment.md
+│   ├── grading_policy.md
 │   ├── privacy_policy.md
-│   ├── product_safety_recalls.md
-│   ├── return_refund_policy.md
-│   └── store_operating_procedures.md
+│   ├── student_conduct.md
+│   └── tuition_refund.md
 ├── local_cli_setup_script/                # Scripts that run from your local machine
 │   ├── execute_sql.py                     # Generate structured tables via SQL REST API
-│   ├── execute_chunking.py                # Chunk policy docs via SQL REST API
+│   ├── execute_chunking.py                # Generate & chunk policy docs via SQL REST API
 │   └── create_resources.py                # Create Vector Search + Genie Space
 └── workspace_setup_script/                # Databricks notebook (does everything on-cluster)
-    └── 01_quickstart_setup.py
+    ├── 01_quickstart_setup.py
+    └── generate_edu_policy_docs.py        # Education policy document generator
 ```
 
 ### Script arguments
@@ -272,3 +273,4 @@ All local CLI scripts accept the same arguments:
 - All scripts use `random.seed(42)` for reproducibility
 - `create_resources.py` is idempotent — safe to re-run if interrupted
 - Scripts can be run from any directory (paths resolve relative to the script file)
+- Education policy documents are generated programmatically by `generate_edu_policy_docs.py`
