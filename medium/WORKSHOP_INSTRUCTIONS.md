@@ -102,6 +102,41 @@ MCP_SERVERS = [
 
 To discover additional tools: `uv run discover-tools`
 
+### 4c. Choose your model (optional)
+
+The model is env-driven — **you don't need to edit `agent.py` to change it.** The defaults work as-is, so you can skip this section and come back to it for the AI Gateway exercise.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `AGENT_MODEL` | `databricks-claude-opus-4-6` | Which model the agent calls |
+| `AGENT_USE_AI_GATEWAY` | `false` | Route through AI Gateway instead of serving endpoints |
+
+**These two settings are coupled.** The flag decides which base URL the client uses, which decides what kind of name `AGENT_MODEL` has to be:
+
+| `AGENT_USE_AI_GATEWAY` | Requests go to | `AGENT_MODEL` must be |
+|---|---|---|
+| `false` (default) | `{host}/serving-endpoints` | a serving endpoint name, e.g. `databricks-claude-opus-4-6` |
+| `true` | `{host}/ai-gateway/mlflow/v1` | an AI Gateway endpoint, often a UC path like `catalog.schema.my-gw-endpoint` |
+
+Changing one without the other is the most common mistake here — an AI Gateway endpoint name sent to `/serving-endpoints` (or vice versa) fails at request time, not at startup.
+
+**To route through AI Gateway** (the governance exercise), set both in `.env`:
+
+```env
+AGENT_USE_AI_GATEWAY=true
+AGENT_MODEL=<your-catalog>.<your-schema>.<your-gateway-endpoint>
+```
+
+Ask your instructor for the shared gateway endpoint, or create your own (**Serving → AI Gateway**) so rate limits, usage tracking, and guardrails apply to your agent's traffic.
+
+Whichever you choose, the server logs the resolved pair on startup, so you can confirm what's actually in effect:
+
+```
+INFO:agent_server.agent:Agent model: databricks-claude-opus-4-6 (AI Gateway: False)
+```
+
+If you enable the gateway but leave `AGENT_MODEL` at its default, startup logs a warning telling you to set it.
+
 ---
 
 ## Step 5: Run Locally
@@ -243,5 +278,7 @@ Open the app URL in your browser to use the chat UI.
 | `databricks bundle deploy` says "unknown field" | Upgrade CLI to v0.295.0+ |
 | `An app with the same name already exists` | Delete: `databricks apps delete <name>` or bind: `databricks bundle deployment bind agent_openai_agents_sdk <name> --auto-approve` |
 | MCP tools not responding | Verify URLs in `agent.py` match resources from data setup. Format: `/api/2.0/mcp/vector-search/catalog/schema/index` |
+| Model or endpoint not found | `AGENT_MODEL` and `AGENT_USE_AI_GATEWAY` disagree — see Step 4c. A gateway endpoint needs `AGENT_USE_AI_GATEWAY=true`; a serving endpoint needs `false` |
+| Not sure which model is in use | Check the startup log: `Agent model: <name> (AI Gateway: <bool>)` |
 | Vector Search returns no results | Index may not be synced — wait 5-10 min after creation |
 | Local app won't start | Check `lsof -ti :8000` — kill orphan processes |
