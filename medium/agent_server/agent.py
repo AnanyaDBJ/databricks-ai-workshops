@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # implement a simple change
 # NOTE: this will work for all databricks models OTHER than GPT-OSS, which uses a slightly different API
-set_default_openai_client(AsyncDatabricksOpenAI())
+set_default_openai_client(AsyncDatabricksOpenAI(use_ai_gateway=True))
 set_default_openai_api("chat_completions")
 set_trace_processors([])  # only use mlflow for trace processing
 mlflow.openai.autolog()
@@ -40,7 +40,7 @@ mlflow.openai.autolog()
 
 NAME = 'my-agent'
 SYSTEM_PROMPT = 'You are a helpful assistant.'
-MODEL = 'databricks-claude-opus-4-6'
+MODEL = 'ananya_workshop_stable_catalog.agents.workshop-gw-endpoint'
 MCP_SERVERS = [
     # Add your MCP servers here, e.g.:
     # ('Vector Search: <catalog>.<schema>.<index>', '/api/2.0/mcp/vector-search/<catalog>/<schema>/<index>'),
@@ -76,6 +76,25 @@ def create_agent(mcp_servers: List[MCPServer]) -> Agent:
     )
 
 
+def _convert_input(request_input):
+    """Convert input items to a format the Agents SDK accepts.
+
+    `exclude_none=True` lets assistant items match the SDK's easy-input-message
+    branch, which requires keys to be exactly {content, role}. That branch routes
+    through extract_all_content, which accepts 'text' but raises on 'output_text' —
+    hence the rewrite.
+    """
+    messages = []
+    for i in request_input:
+        item = i.model_dump(exclude_none=True)
+        if "content" in item and isinstance(item["content"], list):
+            for c in item["content"]:
+                if isinstance(c, dict) and c.get("type") == "output_text":
+                    c["type"] = "text"
+        messages.append(item)
+    return messages
+
+
 @invoke()
 async def invoke(request: ResponsesAgentRequest) -> ResponsesAgentResponse:
     session_id = get_session_id(request)
@@ -93,7 +112,7 @@ async def invoke(request: ResponsesAgentRequest) -> ResponsesAgentResponse:
             if session:
                 messages = await deduplicate_input(request, session)
             else:
-                messages = [i.model_dump() for i in request.input]
+                messages = _convert_input(request.input)
 
             result = await Runner.run(agent, messages, session=session)
             return ResponsesAgentResponse(
@@ -124,7 +143,7 @@ async def stream(request: ResponsesAgentRequest) -> AsyncGenerator[ResponsesAgen
         if session:
             messages = await deduplicate_input(request, session)
         else:
-            messages = [i.model_dump() for i in request.input]
+            messages = _convert_input(request.input)
 
         result = Runner.run_streamed(agent, input=messages, session=session)
 
