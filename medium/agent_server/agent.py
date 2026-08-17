@@ -1,5 +1,6 @@
 
 import logging
+import os
 
 from agents.mcp import MCPServer, MCPServerManager
 from typing import AsyncGenerator, List
@@ -29,9 +30,25 @@ from agent_server.utils import (
 
 logger = logging.getLogger(__name__)
 
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# Routing is env-driven so the same code works with or without AI Gateway.
+# The two settings are coupled: AI Gateway routes to {host}/ai-gateway/mlflow/v1,
+# where AGENT_MODEL is a gateway endpoint (often a UC path like
+# catalog.schema.endpoint); without it, requests go to {host}/serving-endpoints,
+# where AGENT_MODEL is a serving endpoint name like databricks-claude-opus-4-6.
+USE_AI_GATEWAY = _env_flag("AGENT_USE_AI_GATEWAY")
+DEFAULT_MODEL = "databricks-claude-opus-4-6"
+
 # implement a simple change
 # NOTE: this will work for all databricks models OTHER than GPT-OSS, which uses a slightly different API
-set_default_openai_client(AsyncDatabricksOpenAI(use_ai_gateway=True))
+set_default_openai_client(AsyncDatabricksOpenAI(use_ai_gateway=USE_AI_GATEWAY))
 set_default_openai_api("chat_completions")
 set_trace_processors([])  # only use mlflow for trace processing
 mlflow.openai.autolog()
@@ -40,7 +57,7 @@ mlflow.openai.autolog()
 
 NAME = 'my-agent'
 SYSTEM_PROMPT = 'You are a helpful assistant.'
-MODEL = 'ananya_workshop_stable_catalog.agents.workshop-gw-endpoint'
+MODEL = os.environ.get('AGENT_MODEL', DEFAULT_MODEL)
 MCP_SERVERS = [
     # Add your MCP servers here, e.g.:
     # ('Vector Search: <catalog>.<schema>.<index>', '/api/2.0/mcp/vector-search/<catalog>/<schema>/<index>'),
@@ -48,6 +65,14 @@ MCP_SERVERS = [
 ]
 
 # END GENERATED
+
+logger.info("Agent model: %s (AI Gateway: %s)", MODEL, USE_AI_GATEWAY)
+if USE_AI_GATEWAY and MODEL == DEFAULT_MODEL:
+    logger.warning(
+        "AGENT_USE_AI_GATEWAY is enabled but AGENT_MODEL is still the default "
+        "serving endpoint %r. Set AGENT_MODEL to your AI Gateway endpoint.",
+        DEFAULT_MODEL,
+    )
 
 lakebase_config = init_lakebase_config()
 
