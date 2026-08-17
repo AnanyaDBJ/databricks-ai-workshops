@@ -139,7 +139,7 @@ resources:
   apps:
     agent_openai_agents_sdk:
       name: "agent-workshop-jsmith"                    # ← your unique app name
-      # ... (leave env vars section unchanged) ...
+      # ... (env vars stay as-is unless you do the AI Gateway step in 5c) ...
       resources:
         - name: 'experiment'
           experiment:
@@ -174,6 +174,47 @@ MCP_SERVERS = [
 |---|---|---|
 | `<catalog>/<schema>/<index-name>` | Your Vector Search Index (dots → slashes) | `my_catalog/my_schema/policy_docs_index` |
 | `<genie-space-id>` | Your Genie Space ID | `01abcdef12345678` |
+
+**Do not edit the model in `agent.py`** — it reads from the environment, which you set in `databricks.yml` (next step).
+
+### 5c. Choose your model (optional)
+
+The defaults in `databricks.yml` work as-is, so you can skip this and come back for the AI Gateway exercise.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `AGENT_MODEL` | `databricks-claude-opus-4-6` | Which model the agent calls |
+| `AGENT_USE_AI_GATEWAY` | `false` | Route through AI Gateway instead of serving endpoints |
+
+**These two settings are coupled.** The flag decides the base URL, which decides what kind of name `AGENT_MODEL` has to be:
+
+| `AGENT_USE_AI_GATEWAY` | Requests go to | `AGENT_MODEL` must be |
+|---|---|---|
+| `false` (default) | `{host}/serving-endpoints` | a serving endpoint name, e.g. `databricks-claude-opus-4-6` |
+| `true` | `{host}/ai-gateway/mlflow/v1` | an AI Gateway endpoint, often a UC path like `catalog.schema.my-gw-endpoint` |
+
+Changing one without the other is the most common mistake here — a mismatch fails at request time, not at deploy time.
+
+**To route through AI Gateway**, edit the `env:` block of `databricks.yml`:
+
+```yaml
+          - name: AGENT_MODEL
+            value: "<your-catalog>.<your-schema>.<your-gateway-endpoint>"
+          - name: AGENT_USE_AI_GATEWAY
+            value: "true"
+```
+
+Ask your instructor for the shared gateway endpoint, or create your own under **Serving → AI Gateway** so rate limits, usage tracking, and guardrails apply to your agent's traffic.
+
+> **Note:** the app's service principal needs `CAN_QUERY` on whichever endpoint you point at — see Step 7.
+
+After deploying, confirm what took effect in the app logs:
+
+```
+INFO:agent_server.agent:Agent model: databricks-claude-opus-4-6 (AI Gateway: False)
+```
+
+If you enable the gateway but leave `AGENT_MODEL` at its default, the logs carry a warning telling you to set it.
 
 ---
 
@@ -294,6 +335,8 @@ If the agent responds with relevant answers, you're done!
 | `databricks bundle validate` shows errors | Unreplaced placeholder in YAML | Read the error — it points to the exact line |
 | Vector Search returns no results | Index hasn't finished syncing | Wait 5-10 minutes after Step 2 |
 | `PERMISSION_DENIED` or agent tools return empty | SP doesn't have UC or Genie access | Complete Step 7 (Grant Permissions) |
+| Model or endpoint not found | `AGENT_MODEL` and `AGENT_USE_AI_GATEWAY` disagree | See Step 5c — a gateway endpoint needs the flag `"true"`, a serving endpoint needs `"false"` |
+| Not sure which model is in use | — | App logs print `Agent model: <name> (AI Gateway: <bool>)` at startup |
 
 ---
 
