@@ -29,6 +29,7 @@ from agent_server.utils import (
 
 logger = logging.getLogger(__name__)
 
+# implement a simple change
 # NOTE: this will work for all databricks models OTHER than GPT-OSS, which uses a slightly different API
 set_default_openai_client(AsyncDatabricksOpenAI())
 set_default_openai_api("chat_completions")
