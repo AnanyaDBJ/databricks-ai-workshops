@@ -145,6 +145,44 @@ def _grant_permissions(client, grantee: str, memory_type: str):
     )
 
 
+def run_lakebase_grants(
+    sp_client_id: str,
+    memory_type: str,
+    instance_name: str | None = None,
+    project: str | None = None,
+    branch: str | None = None,
+) -> None:
+    """Connect to Lakebase, ensure the SP role exists, and grant all permissions.
+
+    Importable entry point used by both this script's ``main()`` and ``grant_all.py``.
+    Exactly one of (instance_name) or (project + branch) must be provided.
+    """
+    from databricks_ai_bridge.lakebase import LakebaseClient
+
+    with LakebaseClient(
+        instance_name=instance_name or None,
+        project=project or None,
+        branch=branch or None,
+    ) as client:
+        if instance_name:
+            print(f"Using provisioned instance: {instance_name}")
+        else:
+            print(f"Using autoscaling project: {project}, branch: {branch}")
+        print(f"Memory type: {memory_type}")
+
+        print(f"Creating role for SP {sp_client_id}...")
+        try:
+            client.create_role(sp_client_id, "SERVICE_PRINCIPAL")
+            print("  Role created.")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                print("  Role already exists, skipping.")
+            else:
+                raise
+
+        _grant_permissions(client, sp_client_id, memory_type)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Grant Lakebase permissions to an app service principal."
@@ -214,31 +252,13 @@ def main():
         )
         sys.exit(1)
 
-    from databricks_ai_bridge.lakebase import LakebaseClient
-
-    with LakebaseClient(
-        instance_name=args.instance_name or None,
-        project=args.project or None,
-        branch=args.branch or None,
-    ) as client:
-        if has_provisioned:
-            print(f"Using provisioned instance: {args.instance_name}")
-        else:
-            print(f"Using autoscaling project: {args.project}, branch: {args.branch}")
-        print(f"Memory type: {args.memory_type}")
-
-        grantee = args.sp_client_id
-        print(f"Creating role for SP {grantee}...")
-        try:
-            client.create_role(grantee, "SERVICE_PRINCIPAL")
-            print("  Role created.")
-        except Exception as e:
-            if "already exists" in str(e).lower():
-                print("  Role already exists, skipping.")
-            else:
-                raise
-
-        _grant_permissions(client, grantee, args.memory_type)
+    run_lakebase_grants(
+        sp_client_id=args.sp_client_id,
+        memory_type=args.memory_type,
+        instance_name=args.instance_name if has_provisioned else None,
+        project=args.project if has_autoscaling else None,
+        branch=args.branch if has_autoscaling else None,
+    )
 
 
 if __name__ == "__main__":
