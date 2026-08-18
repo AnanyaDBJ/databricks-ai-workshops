@@ -500,8 +500,25 @@ def get_databricks_username(profile_name: str) -> str:
         sys.exit(1)
 
 
+def prompt_with_default(label: str, default: str) -> str:
+    """Prompt with a prepopulated default. Enter accepts the default.
+
+    Returns the default unchanged when there's no TTY (non-interactive / CI),
+    so scripted runs behave exactly as before.
+    """
+    if not sys.stdin.isatty():
+        return default
+    entered = input(f"  {label} [{default}]: ").strip()
+    return entered or default
+
+
 def create_mlflow_experiment(profile_name: str, username: str) -> tuple[str, str]:
-    """Create (or reuse) an MLflow experiment and return (name, id)."""
+    """Create (or reuse) an MLflow experiment and return (name, id).
+
+    Asks the user to name the experiment, prepopulated with a sensible default
+    (the one already in .env if present, else 'agents-on-apps'). Press Enter to
+    accept. An existing experiment with the chosen name is reused, not duplicated.
+    """
     print_step("Setting up MLflow experiment...")
 
     w = get_workspace_client(profile_name)
@@ -510,41 +527,54 @@ def create_mlflow_experiment(profile_name: str, username: str) -> tuple[str, str
         print_troubleshooting_api()
         sys.exit(1)
 
-    # Check if we already have an experiment ID in .env (idempotency)
+    # Default name: reuse the one already in .env if it's still valid, else a default.
+    default_leaf = "agents-on-apps"
     existing_id = get_env_value("MLFLOW_EXPERIMENT_ID")
+    existing_name = None
     if existing_id:
         try:
             exp = w.experiments.get_experiment(experiment_id=existing_id).experiment
             if exp and exp.name:
-                print_success(f"Reusing existing experiment '{exp.name}' (ID: {existing_id})")
-                return exp.name, existing_id
+                existing_name = exp.name
+                default_leaf = exp.name.rstrip("/").split("/")[-1]
         except Exception:
             pass
-        print("Existing experiment not found or invalid, creating a new one...")
 
-    experiment_name = f"/Users/{username}/agents-on-apps"
+    # Ask for the experiment name (Enter accepts the default).
+    leaf = prompt_with_default("MLflow experiment name", default_leaf)
+    experiment_name = f"/Users/{username}/{leaf}"
 
+    # If the chosen name is the existing valid experiment, reuse it by ID.
+    if existing_id and existing_name == experiment_name:
+        print_success(f"Reusing existing experiment '{experiment_name}' (ID: {existing_id})")
+        return experiment_name, existing_id
+
+    # Reuse an experiment that already has this name, rather than duplicating it.
     try:
-        # Try to create with default name
-        try:
-            experiment_id = w.experiments.create_experiment(name=experiment_name).experiment_id or ""
-            print_success(f"Created experiment '{experiment_name}' with ID: {experiment_id}")
-            return experiment_name, experiment_id
-        except Exception:
-            pass
+        got = w.experiments.get_by_name(experiment_name)
+        exp = getattr(got, "experiment", None)
+        if exp and exp.experiment_id and getattr(exp, "lifecycle_stage", "active") == "active":
+            print_success(f"Reusing experiment '{experiment_name}' (ID: {exp.experiment_id})")
+            return experiment_name, exp.experiment_id
+    except Exception:
+        pass
 
-        # Name already exists, try with random suffix
-        print("Experiment name already exists, creating with random suffix...")
-        random_suffix = secrets.token_hex(4)
-        experiment_name = f"/Users/{username}/agents-on-apps-{random_suffix}"
+    # Otherwise create it. On a name collision, fall back to a random suffix.
+    try:
         experiment_id = w.experiments.create_experiment(name=experiment_name).experiment_id or ""
         print_success(f"Created experiment '{experiment_name}' with ID: {experiment_id}")
         return experiment_name, experiment_id
-
-    except Exception as e:
-        print_error(f"Failed to create MLflow experiment: {e}")
-        print_troubleshooting_api()
-        sys.exit(1)
+    except Exception:
+        print("Experiment name already exists, creating with a random suffix...")
+        try:
+            suffixed = f"{experiment_name}-{secrets.token_hex(4)}"
+            experiment_id = w.experiments.create_experiment(name=suffixed).experiment_id or ""
+            print_success(f"Created experiment '{suffixed}' with ID: {experiment_id}")
+            return suffixed, experiment_id
+        except Exception as e:
+            print_error(f"Failed to create MLflow experiment: {e}")
+            print_troubleshooting_api()
+            sys.exit(1)
 
 
 def check_lakebase_required() -> bool:
@@ -655,7 +685,9 @@ def create_lakebase_instance(profile_name: str) -> dict:
         print_error("Could not connect to Databricks. Check your CLI profile.")
         sys.exit(1)
 
-    name = input("Enter a name for the new Lakebase autoscaling project: ").strip()
+    name = prompt_with_default(
+        "Name for the new Lakebase autoscaling project", "agent-lakebase"
+    )
     if not name:
         print_error("Instance name is required")
         sys.exit(1)

@@ -72,7 +72,7 @@ Note these values from the output — you'll paste them when the scripts prompt 
 uv run quickstart
 ```
 
-From your prompted input this creates the **Lakebase** instance (autoscaling project + branch — no UI needed), sets up the **MLflow experiment** (or reuses the one from Step 2), writes `.env`, and fills in `databricks.yml` (app name, experiment, Lakebase resources).
+From your prompted input this creates the **Lakebase** instance (autoscaling project + branch — no UI needed), sets up the **MLflow experiment**, writes `.env`, and fills in `databricks.yml` (app name, experiment, Lakebase resources). It **prompts for the experiment name and the Lakebase project name**, each prepopulated with a default — press **Enter** to accept, or type your own to override.
 
 Using a **provisioned** Lakebase instance instead? Pass its name so nothing is created:
 

@@ -58,9 +58,11 @@ uv run quickstart --profile DEFAULT
 
 This interactive wizard handles, from your prompted input:
 - Databricks CLI authentication (OAuth login)
-- MLflow experiment (creates one, or reuses the ID from your data setup)
-- **Lakebase instance** — creates an autoscaling project + branch for you (no UI needed)
+- **MLflow experiment** — prompts for the name (prepopulated default; Enter to accept), then creates or reuses it
+- **Lakebase instance** — creates an autoscaling project + branch; when creating, prompts for the project name (default provided, Enter to accept). No UI needed.
 - Writes `.env` and fills in `databricks.yml` (app name, experiment, Lakebase resources)
+
+> Names are prepopulated — press **Enter** to accept a default, or type your own to override. If your `.env` already has an experiment/Lakebase from a previous run, the default is that existing one.
 
 Follow the prompts. Already have a Lakebase instance? Pass it and skip creation:
 
