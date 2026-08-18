@@ -92,6 +92,13 @@ def _grant_permissions(client, grantee: str, memory_type: str):
     for schema, tables in MEMORY_TYPE_SCHEMAS[memory_type].items():
         schema_tables.setdefault(schema, []).extend(tables)
 
+    # Grant USAGE + CREATE on `public` too. Postgres 15+ revokes CREATE on public
+    # from non-owners by default, and the agent's memory session can fall back to
+    # creating tables there — without this the deployed app crashes with
+    # "permission denied for schema public". No table list: the SP owns whatever
+    # it creates, so schema-level CREATE is enough.
+    schema_tables.setdefault("public", [])
+
     schema_privileges = [SchemaPrivilege.USAGE, SchemaPrivilege.CREATE]
     table_privileges = [
         TablePrivilege.SELECT,

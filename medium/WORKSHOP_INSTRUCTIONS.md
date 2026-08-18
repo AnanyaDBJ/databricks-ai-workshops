@@ -60,7 +60,8 @@ This interactive wizard handles, from your prompted input:
 - Databricks CLI authentication (OAuth login)
 - **MLflow experiment** — prompts for the name (prepopulated default; Enter to accept), then creates or reuses it
 - **Lakebase instance** — creates an autoscaling project + branch; when creating, prompts for the project name (default provided, Enter to accept). No UI needed.
-- Writes `.env` and fills in `databricks.yml` (app name, experiment, Lakebase resources)
+- **App name** — prompts for it (default `agent-<username>`, Enter to accept)
+- Writes `.env` and fills in `databricks.yml` completely — app name, **workspace host**, experiment, and Lakebase resources — so you never hand-edit it before deploy
 
 > Names are prepopulated — press **Enter** to accept a default, or type your own to override. If your `.env` already has an experiment/Lakebase from a previous run, the default is that existing one.
 
@@ -148,15 +149,19 @@ Open `http://localhost:3000` and try:
 
 ## Step 5: Deploy to Databricks Apps
 
-Deploy it yourself — this is the "ship it" moment. `quickstart` already filled `databricks.yml`, so this is usually just:
+Deploy it yourself — this is the "ship it" moment. `quickstart` already filled `databricks.yml` (host, app name, experiment, Lakebase) and `configure-agent` set the model, so no hand-editing:
 
 ```bash
 databricks bundle validate --profile DEFAULT
 databricks bundle deploy --profile DEFAULT           # uploads code, creates app + resources
-databricks bundle run agent_openai_agents_sdk --profile DEFAULT   # starts the app
+databricks bundle run agent_openai_agents_sdk --profile DEFAULT   # starts the app (~3-5 min first time)
 ```
 
-> **Fallback / edits:** [`MANUAL_SETUP.md` → Deploy](./MANUAL_SETUP.md#deploy) — including the `databricks.yml` fields and how to bind an existing app.
+> First `bundle run` takes a few minutes — the compute installs Python deps and builds the frontend on boot (they aren't shipped). Every restart pays this cost; it's inherent to Apps.
+>
+> **`workspace_id mismatch` on deploy?** Your workspace was likely recreated with a new id and a stale id lingers — see [`MANUAL_SETUP.md` → Troubleshooting deploy](./MANUAL_SETUP.md#workspace_id-mismatch-provider-is-configured-for-workspace-x-but-got-y).
+>
+> **Fallback / edits:** [`MANUAL_SETUP.md` → Deploy](./MANUAL_SETUP.md#deploy) — including how to bind an existing app.
 
 ---
 
@@ -167,9 +172,10 @@ uv run grant-all --profile DEFAULT
 ```
 
 This resolves the deployed app's service principal automatically and grants everything it needs, from your own config:
-- **Lakebase** schema/table/sequence grants (agent memory + chat history)
+- **Lakebase** schema/table/sequence grants — `USAGE + CREATE` on `public`, `drizzle`, `ai_chatbot`, `agent_openai_memory` (memory + chat history). This is what a bare deploy otherwise crashes on, because you own the schemas from local testing.
 - **Unity Catalog** `USE CATALOG` / `USE SCHEMA` / `SELECT` on the catalog.schema your tools read
 - **Genie** "Can Run" (or prints the exact UI step if the API can't do it in your workspace)
+- **AI Gateway** `CAN_QUERY` on your gateway endpoint — only when `AGENT_USE_AI_GATEWAY=true` (prints the manual step if it can't resolve the endpoint)
 
 Each grant is independent and best-effort — a failure in one is reported and the rest still run. Re-run after the app's first request if any Lakebase table grants were skipped (tables are created on first use).
 
@@ -212,6 +218,8 @@ Open the app URL in your browser to use the chat UI.
 | `permission denied for schema`/`sequence` | Run `uv run grant-all` (or the Step 6 fallback SQL) |
 | App crashes after deploy | Check `databricks apps logs` — usually a missing env var or permission |
 | `databricks bundle deploy` says "unknown field" | Upgrade CLI to v0.295.0+ |
+| `workspace_id mismatch` on deploy | Workspace recreated with a new id; clear the stale id in 3 places — see [`MANUAL_SETUP.md`](./MANUAL_SETUP.md#workspace_id-mismatch-provider-is-configured-for-workspace-x-but-got-y) |
+| App crashes: `permission denied for schema` (public/drizzle/ai_chatbot) | Run `uv run grant-all`, or drop those schemas and let the SP recreate them — see [`MANUAL_SETUP.md`](./MANUAL_SETUP.md#app-crashes-with-permission-denied-for-schema-public--drizzle--ai_chatbot) |
 | `An app with the same name already exists` | Delete: `databricks apps delete <name>`, or bind: `databricks bundle deployment bind agent_openai_agents_sdk <name> --auto-approve` |
 | MCP tools not responding | Re-run `uv run configure-agent`; URLs must match `/api/2.0/mcp/vector-search/catalog/schema/index` |
 | Model or endpoint not found | `AGENT_MODEL` and `AGENT_USE_AI_GATEWAY` disagree — see Step 3. Gateway endpoint needs `true`; serving endpoint needs `false` |

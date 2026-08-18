@@ -487,6 +487,41 @@ def get_databricks_host(profile_name: str) -> str:
     return ""
 
 
+def warn_if_stale_workspace_id(profile_name: str) -> None:
+    """Warn if ~/.databrickscfg pins a workspace_id that no longer matches the live one.
+
+    A recreated workspace (common with ephemeral FEVM workspaces) keeps the same host
+    but gets a new id; a stale pinned `workspace_id` then causes `bundle deploy` to fail
+    with 'workspace_id mismatch'. Detect it early so it's an obvious fix, not a rabbit hole.
+    """
+    try:
+        import configparser
+
+        cfg_path = Path.home() / ".databrickscfg"
+        if not cfg_path.exists():
+            return
+        parser = configparser.ConfigParser()
+        parser.read(cfg_path)
+        section = profile_name if parser.has_section(profile_name) else "DEFAULT"
+        pinned = parser.get(section, "workspace_id", fallback=None)
+        if not pinned:
+            return
+        w = get_workspace_client(profile_name)
+        if not w:
+            return
+        live = str(w.get_workspace_id())
+        if live and pinned.strip() != live:
+            print_error(
+                f"Profile '{section}' pins workspace_id={pinned.strip()} but this workspace "
+                f"is {live}. This will cause a 'workspace_id mismatch' on deploy.\n"
+                f"  Fix: delete the `workspace_id = ...` line under [{section}] in "
+                f"~/.databrickscfg, then re-run."
+            )
+    except Exception:
+        # Best-effort check only — never block setup on it.
+        pass
+
+
 def get_databricks_username(profile_name: str) -> str:
     """Get the current Databricks username."""
     try:
@@ -498,6 +533,20 @@ def get_databricks_username(profile_name: str) -> str:
         print_error(f"Failed to get Databricks username: {e}")
         print_troubleshooting_api()
         sys.exit(1)
+
+
+def _default_app_name(profile_name: str) -> str:
+    """A sensible default app name derived from the user, e.g. 'agent-jsmith'.
+
+    App names must be lowercase alphanumerics/hyphens; keep it short and valid.
+    """
+    try:
+        username = get_databricks_username(profile_name)
+    except SystemExit:
+        return "agent-app"
+    localpart = (username or "app").split("@")[0]
+    slug = re.sub(r"[^a-z0-9-]+", "-", localpart.lower()).strip("-") or "app"
+    return f"agent-{slug}"[:30].rstrip("-")
 
 
 def prompt_with_default(label: str, default: str) -> str:
@@ -1481,6 +1530,29 @@ def update_databricks_yml_experiment(experiment_id: str) -> None:
     print_success("Updated databricks.yml with experiment ID")
 
 
+def update_databricks_yml_host(host: str) -> None:
+    """Set workspace.host on every target in databricks.yml (dev, prod, ...).
+
+    Removes the need to hand-edit the `<your-workspace>` placeholder before deploy.
+    """
+    if not host:
+        return
+    yml_path = Path("databricks.yml")
+    if not yml_path.exists():
+        return
+    yaml, data = _load_yml(yml_path)
+    targets = data.get("targets", {})
+    updated = False
+    for target in targets.values():
+        ws = target.get("workspace") if isinstance(target, dict) else None
+        if isinstance(ws, dict):
+            ws["host"] = DoubleQuotedScalarString(host)
+            updated = True
+    if updated:
+        _save_yml(yaml, data, yml_path)
+        print_success(f"Updated databricks.yml workspace host to '{host}'")
+
+
 def update_databricks_yml_app_name(app_name: str, budget_policy_id: str | None = None) -> str:
     """Update the app name field in databricks.yml.
 
@@ -1589,9 +1661,17 @@ Examples:
         # Step 3: Databricks authentication
         profile_name = setup_databricks_auth(args.profile, args.host)
 
+        # Catch a stale pinned workspace_id early (recreated-workspace deploy failure).
+        warn_if_stale_workspace_id(profile_name)
+
+        # Set the workspace host in databricks.yml from the resolved profile so the
+        # `<your-workspace>` placeholder never has to be edited by hand before deploy.
+        update_databricks_yml_host(get_databricks_host(profile_name))
+
         # Step 4: Existing app binding (optional) — do this early so app resources
         # (experiment, lakebase) take precedence over fresh creation.
         app_name = args.app_name
+        binding_existing = bool(args.app_name)
         if not app_name and sys.stdin.isatty():
             print_step("Optional: Bind to an existing Databricks app")
             print("If you created an app via the Databricks UI before cloning this template,")
@@ -1601,6 +1681,13 @@ Examples:
             ).strip()
             if answer:
                 app_name = answer
+                binding_existing = True
+
+        # No existing app to bind — name the new app now (written to databricks.yml)
+        # so the generic "my-agent-app" placeholder isn't deployed as-is.
+        if not app_name:
+            default_app_name = _default_app_name(profile_name)
+            app_name = prompt_with_default("New app name", default_app_name)
 
         bundle_key = ""
         lakebase_config = None
@@ -1608,6 +1695,8 @@ Examples:
         if app_name:
             bundle_key = update_databricks_yml_app_name(app_name)
 
+        # Only an existing app has resources to adopt; a fresh name does not.
+        if binding_existing:
             # Fetch resources from the existing app and use them in databricks.yml
             app_resources = get_app_resources(profile_name, app_name)
             for resource in app_resources:

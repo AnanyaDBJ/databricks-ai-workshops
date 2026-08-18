@@ -314,3 +314,59 @@ GRANT SELECT ON SCHEMA <your-catalog>.<your-schema> TO `<SP_CLIENT_ID>`;
 - Open the app URL and test Vector Search, Genie, and memory prompts.
 
 If the agent answers with relevant, tool-grounded responses, you're done.
+
+---
+
+## Troubleshooting deploy
+
+### `workspace_id mismatch: provider is configured for workspace X but got Y`
+
+Your CLI auth resolves to one workspace but the bundle/state carries a different
+workspace id. This usually happens when a workspace is **recreated with a new id** (common
+with ephemeral FEVM workspaces) while a stale id lingers in three places. Clear **all
+three**, then redeploy:
+
+```bash
+# 1) Remove any pinned workspace_id from the profile (let it resolve live)
+#    Edit ~/.databrickscfg and delete the `workspace_id = ...` line under [DEFAULT].
+#    Confirm what it resolves to now:
+databricks auth describe --profile DEFAULT     # note the workspace_id it prints
+
+# 2) Remove the local bundle state
+rm -rf .databricks
+
+# 3) Remove the stale remote bundle state in the workspace
+databricks workspace delete \
+  "/Workspace/Users/<you>@<domain>/.bundle/agent_openai_agents_sdk" \
+  --recursive --profile DEFAULT
+
+# 4) Redeploy fresh
+databricks bundle deploy --profile DEFAULT
+```
+
+> `quickstart` warns if your profile pins a `workspace_id` that no longer matches the live
+> workspace — if you saw that warning, this is the fix.
+
+### App crashes with `permission denied for schema` (public / drizzle / ai_chatbot)
+
+You created those schemas when running locally (`uv run start-app`), so you own them; the
+deployed app's service principal can't create tables in them. Two fixes:
+
+1. **Grant** — `uv run grant-all` grants the SP `USAGE + CREATE` on `public`, `drizzle`,
+   `ai_chatbot`, and `agent_openai_memory`. This is the normal path.
+2. **Or drop and let the app own them** — connect to Lakebase and run, then restart the app:
+   ```sql
+   DROP SCHEMA IF EXISTS ai_chatbot CASCADE;
+   DROP SCHEMA IF EXISTS drizzle CASCADE;
+   DROP SCHEMA IF EXISTS agent_openai_memory CASCADE;
+   ```
+   (The app recreates them on next start and owns them — no grants needed. Requires the SP
+   to have `CREATE` on the database, which the `CAN_CONNECT_AND_CREATE` bundle grant provides.)
+
+### App works but model calls 403 / Genie questions fail
+
+- **Model 403 (AI Gateway):** the SP needs `CAN_QUERY` on your gateway endpoint. `uv run
+  grant-all` attempts this automatically when `AGENT_USE_AI_GATEWAY=true`; if it couldn't,
+  grant it in the UI (Serving → the endpoint → Permissions → add the SP → Can Query).
+- **Genie fails:** grant the SP **Can Run** on the Genie space (Genie space → Share).
+  `grant-all` attempts this and prints the manual step if the API can't.

@@ -39,6 +39,7 @@ from scripts.discover_tools import (  # noqa: E402
 
 AGENT_FILE = Path(__file__).resolve().parent.parent / "agent_server" / "agent.py"
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+DATABRICKS_YML = Path(__file__).resolve().parent.parent / "databricks.yml"
 
 GENERATED_START = "# GENERATED"
 GENERATED_END = "# END GENERATED"
@@ -74,6 +75,48 @@ def get_env_value(key: str) -> str:
         return ""
     match = re.search(rf"^{re.escape(key)}=(.*)$", ENV_FILE.read_text(), re.MULTILINE)
     return match.group(1).strip().strip('"').strip("'") if match else ""
+
+
+def sync_model_to_databricks_yml(model: str, use_gateway: str) -> None:
+    """Mirror AGENT_MODEL / AGENT_USE_AI_GATEWAY into databricks.yml's app env.
+
+    The deployed app reads its env from databricks.yml, not .env — so without this,
+    the deployed app would silently ignore the model the attendee just chose.
+    """
+    if not DATABRICKS_YML.exists():
+        return
+    try:
+        from ruamel.yaml import YAML
+        from ruamel.yaml.scalarstring import DoubleQuotedScalarString
+    except Exception:  # noqa: BLE001
+        warn("ruamel.yaml not available — skipping databricks.yml model sync.")
+        return
+
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    data = yaml.load(DATABRICKS_YML.read_text())
+    desired = {"AGENT_MODEL": model, "AGENT_USE_AI_GATEWAY": use_gateway}
+    changed = False
+    for app in (data.get("resources", {}).get("apps", {}) or {}).values():
+        env = (app.get("config", {}) or {}).get("env")
+        if not isinstance(env, list):
+            continue
+        present = set()
+        for item in env:
+            name = item.get("name") if isinstance(item, dict) else None
+            if name in desired and "value" in item:
+                item["value"] = DoubleQuotedScalarString(desired[name])
+                present.add(name)
+                changed = True
+        # Append any missing keys so the deployed app is fully specified.
+        for name, value in desired.items():
+            if name not in present:
+                env.append({"name": name, "value": DoubleQuotedScalarString(value)})
+                changed = True
+    if changed:
+        with open(DATABRICKS_YML, "w") as f:
+            yaml.dump(data, f)
+        ok("Synced AGENT_MODEL / AGENT_USE_AI_GATEWAY into databricks.yml (deployed app)")
 
 
 def update_env_value(key: str, value: str) -> None:
@@ -330,6 +373,8 @@ def main() -> None:
     update_env_value("AGENT_MODEL", model)
     update_env_value("AGENT_USE_AI_GATEWAY", use_gw)
     ok(f"AGENT_MODEL={model}, AGENT_USE_AI_GATEWAY={use_gw} written to .env")
+    # Keep the deployed app in sync — it reads env from databricks.yml, not .env.
+    sync_model_to_databricks_yml(model, use_gw)
     if use_gw.lower() == "true" and model == "databricks-claude-opus-4-6":
         warn(
             "AI Gateway is on but AGENT_MODEL is still the serving-endpoint default. "

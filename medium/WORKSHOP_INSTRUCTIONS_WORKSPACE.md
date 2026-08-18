@@ -72,7 +72,7 @@ Note these values from the output — you'll paste them when the scripts prompt 
 uv run quickstart
 ```
 
-From your prompted input this creates the **Lakebase** instance (autoscaling project + branch — no UI needed), sets up the **MLflow experiment**, writes `.env`, and fills in `databricks.yml` (app name, experiment, Lakebase resources). It **prompts for the experiment name and the Lakebase project name**, each prepopulated with a default — press **Enter** to accept, or type your own to override.
+From your prompted input this creates the **Lakebase** instance (autoscaling project + branch — no UI needed), sets up the **MLflow experiment**, writes `.env`, and fills in `databricks.yml` **completely** — app name, **workspace host**, experiment, and Lakebase resources — so you never hand-edit it before deploy. It **prompts for the experiment name, the Lakebase project name, and the app name**, each prepopulated with a default — press **Enter** to accept, or type your own to override.
 
 Using a **provisioned** Lakebase instance instead? Pass its name so nothing is created:
 
@@ -138,9 +138,9 @@ databricks bundle run agent_openai_agents_sdk
 uv run grant-all
 ```
 
-Resolves the app's service principal automatically and grants everything it needs — **Lakebase** (memory + chat history), **Unity Catalog** (`USE CATALOG`/`USE SCHEMA`/`SELECT` on your data), and **Genie** "Can Run". Each grant is independent; a failure in one is reported and the rest still run.
+Resolves the app's service principal automatically and grants everything it needs — **Lakebase** `USAGE + CREATE` on `public`/`drizzle`/`ai_chatbot`/`agent_openai_memory` (this is what a bare deploy crashes on, since you own the schemas from local testing), **Unity Catalog** (`USE CATALOG`/`USE SCHEMA`/`SELECT`), **Genie** "Can Run", and **AI Gateway** `CAN_QUERY` (only when `AGENT_USE_AI_GATEWAY=true`). Each grant is independent; a failure in one is reported and the rest still run.
 
-Genie "Can Run" sometimes can't be granted via API in a given workspace — `grant-all` will print the exact object and SP so you can do that one in the UI (Genie space → **Share** → add the SP → **Can Run**).
+Genie "Can Run" and the gateway grant sometimes can't be set via API in a given workspace — `grant-all` prints the exact object and SP so you can do those in the UI (Genie space → **Share**; Serving endpoint → **Permissions**).
 
 > **Fallback:** [`MANUAL_SETUP.md` → Grant permissions](./MANUAL_SETUP.md#grant-permissions-grant-all) — the SP-id lookup, the UC SQL to run in the SQL Editor, and the Genie share steps.
 
@@ -175,3 +175,5 @@ Genie "Can Run" sometimes can't be granted via API in a given workspace — `gra
 | `Lakebase unavailable` | `branch:`/`database:` in `databricks.yml` don't match your instance — re-run `uv run quickstart` or fix per `MANUAL_SETUP.md` |
 | Agent doesn't use tools | Re-run `uv run configure-agent`; URLs must be `/api/2.0/mcp/vector-search/catalog/schema/index` |
 | `Failed to snapshot source code... larger than maximum allowed file size` | Terraform binaries not removed — run the `rm -rf .databricks/...` line, then re-run `databricks bundle run` |
+| `workspace_id mismatch` on deploy | Workspace recreated with a new id; clear the stale id in 3 places — see [`MANUAL_SETUP.md`](./MANUAL_SETUP.md#workspace_id-mismatch-provider-is-configured-for-workspace-x-but-got-y) |
+| App crashes: `permission denied for schema` (public/drizzle/ai_chatbot) | Run `uv run grant-all`, or drop those schemas and let the SP recreate them — see [`MANUAL_SETUP.md`](./MANUAL_SETUP.md#app-crashes-with-permission-denied-for-schema-public--drizzle--ai_chatbot) |

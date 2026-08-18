@@ -189,22 +189,88 @@ def grant_unity_catalog(w, sp_client_id: str, catalog: str, schema: str) -> bool
 
 
 def grant_genie(w, sp_client_id: str, space_ids: list[str]) -> bool:
+    """Best-effort Genie 'Can Run' grant.
+
+    The SDK has no dedicated Genie-permissions method, and the generic permissions
+    object type for Genie varies, so this attempts a couple of known object types
+    and falls back to a precise manual instruction. Never raises.
+    """
     if not space_ids:
         warn("No Genie spaces wired into agent.py — skipping Genie grant.")
         return False
+    from databricks.sdk.service.iam import AccessControlRequest
+
     granted_any = False
     for space_id in space_ids:
-        try:
-            # Genie spaces are permissioned as dashboard-family objects. This API
-            # surface varies across SDK versions, so treat failure as "do it by hand".
-            w.genie  # noqa: B018 - touch to confirm attribute exists
-            raise NotImplementedError
-        except Exception:  # noqa: BLE001
+        done = False
+        for obj_type in ("genie", "dashboards"):
+            try:
+                w.permissions.update(
+                    obj_type,
+                    space_id,
+                    access_control_list=[
+                        AccessControlRequest(
+                            service_principal_name=sp_client_id,
+                            permission_level="CAN_RUN",
+                        )
+                    ],
+                )
+                ok(f"Genie 'Can Run' on {space_id} → {sp_client_id} (via {obj_type})")
+                granted_any = True
+                done = True
+                break
+            except Exception:  # noqa: BLE001
+                continue
+        if not done:
             warn(
                 f"Grant 'Can Run' on Genie space {space_id} to `{sp_client_id}` in the UI "
                 "(Genie space → Share). See MANUAL_SETUP.md → Grant permissions."
             )
     return granted_any
+
+
+def grant_gateway(w, sp_client_id: str, model: str, use_gateway: str) -> bool | None:
+    """Grant the app SP CAN_QUERY on the AI Gateway serving endpoint.
+
+    Only applies when the deployed app is configured for the gateway
+    (AGENT_USE_AI_GATEWAY=true). Returns None when not applicable. Best-effort:
+    resolves the serving endpoint by the model name (or its last segment) and
+    falls back to a precise manual instruction. Never raises.
+    """
+    if str(use_gateway).strip().lower() != "true":
+        return None  # not applicable — serving-endpoint models need no extra grant
+    if not model:
+        warn("AI Gateway enabled but AGENT_MODEL is empty — skipping gateway grant.")
+        return False
+    from databricks.sdk.service.serving import (
+        ServingEndpointAccessControlRequest,
+        ServingEndpointPermissionLevel,
+    )
+
+    for name in (model, model.split(".")[-1]):
+        try:
+            ep = w.serving_endpoints.get(name)
+            ep_id = getattr(ep, "id", None) or getattr(ep, "serving_endpoint_id", None)
+            if not ep_id:
+                continue
+            w.serving_endpoints.update_permissions(
+                ep_id,
+                access_control_list=[
+                    ServingEndpointAccessControlRequest(
+                        service_principal_name=sp_client_id,
+                        permission_level=ServingEndpointPermissionLevel.CAN_QUERY,
+                    )
+                ],
+            )
+            ok(f"CAN_QUERY on serving endpoint '{name}' → {sp_client_id}")
+            return True
+        except Exception:  # noqa: BLE001
+            continue
+    warn(
+        f"Grant CAN_QUERY on the AI Gateway endpoint '{model}' to `{sp_client_id}` in the UI "
+        "(Serving → the endpoint → Permissions). See MANUAL_SETUP.md → Grant permissions."
+    )
+    return False
 
 
 def main() -> None:
@@ -217,6 +283,7 @@ def main() -> None:
     parser.add_argument("--skip-lakebase", action="store_true")
     parser.add_argument("--skip-uc", action="store_true")
     parser.add_argument("--skip-genie", action="store_true")
+    parser.add_argument("--skip-gateway", action="store_true")
     args = parser.parse_args()
 
     print(_c("1", "\n=== Grant all app permissions ===\n"))
@@ -247,8 +314,11 @@ def main() -> None:
         catalog = catalog or c
         schema = schema or s
     space_ids = genie_space_ids_from_agent()
+    model = get_env_value("AGENT_MODEL")
+    use_gateway = get_env_value("AGENT_USE_AI_GATEWAY")
     ok(f"Catalog/schema: {catalog or '?'}.{schema or '?'}")
     ok(f"Genie spaces: {', '.join(space_ids) or 'none'}")
+    ok(f"Model: {model or '?'} (AI Gateway: {use_gateway or 'false'})")
 
     results: dict[str, bool] = {}
 
@@ -261,11 +331,11 @@ def main() -> None:
             results["Lakebase"] = False
 
     w = None
-    if not (args.skip_uc and args.skip_genie):
+    if not (args.skip_uc and args.skip_genie and args.skip_gateway):
         try:
             w = build_workspace_client(profile)
         except Exception as e:  # noqa: BLE001
-            err(f"Could not connect to Databricks for UC/Genie grants: {e}")
+            err(f"Could not connect to Databricks for UC/Genie/gateway grants: {e}")
 
     if w is not None and not args.skip_uc:
         step("Unity Catalog grants")
@@ -278,6 +348,14 @@ def main() -> None:
     if w is not None and not args.skip_genie:
         step("Genie grants")
         results["Genie"] = grant_genie(w, sp_client_id, space_ids)
+
+    if (
+        w is not None
+        and not args.skip_gateway
+        and str(use_gateway).strip().lower() == "true"
+    ):
+        step("AI Gateway grant")
+        results["AI Gateway"] = bool(grant_gateway(w, sp_client_id, model, use_gateway))
 
     # Summary
     step("Summary")
