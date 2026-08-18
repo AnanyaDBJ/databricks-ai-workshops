@@ -1,13 +1,17 @@
 # Manual Setup — L200 Agent (fallback runbook)
 
+> This is a **reference**, not the main guide. Follow
+> [`WORKSHOP_INSTRUCTIONS.md`](./WORKSHOP_INSTRUCTIONS.md) (or the
+> [workspace version](./WORKSHOP_INSTRUCTIONS_WORKSPACE.md)) first — come here only when a
+> step there fails, and jump straight to that step's section below.
+
 **Use this when the setup scripts don't work in your environment.** Workshop workspaces
 differ, and `uv run quickstart` / `configure-agent` / `grant-all` occasionally fail on
-missing tooling, permissions, or SDK versions. This runbook reproduces **every step the
-scripts perform**, by hand, so you can get to a working app either way.
+missing tools, permissions, or library versions. This runbook reproduces **every step the
+scripts perform**, by hand, so you can reach a working app either way.
 
-Each section maps to one script/phase. You can do the whole thing manually, or drop down
-here only for the step that failed and go back to the automated flow afterward — the
-phases are independent.
+Each section matches one script/step. Do the whole thing manually, or drop in here only for
+the step that failed and return to the scripts afterward — the steps are independent.
 
 | Phase | Script it replaces | Section |
 |---|---|---|

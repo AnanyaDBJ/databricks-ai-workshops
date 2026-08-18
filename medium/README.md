@@ -1,15 +1,23 @@
 # Build an AI Agent with Memory on Databricks (L200)
 
-An AI-powered conversational agent using the OpenAI Agents SDK with Genie, Vector Search, and Lakebase memory — deployed as a full-stack Databricks App.
+Build a **chatbot that answers questions about your data** — it searches documents, queries
+your tables in plain English (Genie), and remembers the conversation — then deploy it as a
+live web app on Databricks. You run it locally first, then ship it.
 
 ![L200 Architecture](./L200_Architecture.png)
 
-## Get Started
+## Get started
+
+New here? Open a guide and follow it end to end — it's seven steps, and each explains what
+you're doing and why. Pick the path that matches where you want to work:
 
 | Path | Guide |
 |------|-------|
-| **Local development** (uv, Node.js, CLI on your machine) | [WORKSHOP_INSTRUCTIONS.md](./WORKSHOP_INSTRUCTIONS.md) |
-| **Workspace only** (everything in Databricks, no local setup) | [WORKSHOP_INSTRUCTIONS_WORKSPACE.md](./WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
+| **On your laptop** (you have a terminal, uv, Node.js) | [WORKSHOP_INSTRUCTIONS.md](./WORKSHOP_INSTRUCTIONS.md) |
+| **Entirely in Databricks** (nothing installed locally) | [WORKSHOP_INSTRUCTIONS_WORKSPACE.md](./WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
+
+Either way, do the shared **[data setup](../data/README.md)** first — it creates the tables,
+documents, and search index the agent uses.
 
 ## Quick Commands
 

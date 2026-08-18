@@ -2,9 +2,14 @@
 
 > **This is the first step for all workshop levels.** Complete this setup before starting any workshop (Simple, Medium, or Advanced).
 
-This creates the shared dataset that every workshop level depends on: industry data tables, chunked documents, a Vector Search index, a Genie Space, and an MLflow experiment — all in a Unity Catalog schema you choose.
+This gives your agent something to work with. In one run it creates, in a location you choose:
 
-You pick **one industry** to set up:
+- **Sample tables** — realistic business data (customers, products, transactions, …) for the agent to query
+- **Documents, made searchable** — policy/course docs split into chunks and indexed so the agent can search them by meaning (a **Vector Search index**)
+- **A Genie space** — lets you (and the agent) ask questions about those tables in plain English
+- **An MLflow experiment** — a place where the agent's activity gets logged so you can inspect it later
+
+Everything lands in a **catalog and schema** you name (Databricks' way of organizing and governing data). Pick **one industry** — the shape is the same, only the flavor of the data differs:
 
 | Industry | Brand | Data tables | Documents |
 |----------|-------|-------------|-----------|
