@@ -39,6 +39,11 @@ Both paths run the **same code** and produce the **same result**. Pick one.
 
 Run one command from your laptop. It connects to your Databricks workspace via the CLI.
 
+> **Run every command below from the repository root** — the `databricks-ai-workshops/`
+> directory you get after cloning. The paths are written `data/...` on purpose so you
+> stay in one place; do **not** `cd` into subfolders. (`cd databricks-ai-workshops` after
+> the clone and stay there.)
+
 ### Prerequisites
 
 | Tool | Install |
@@ -50,7 +55,7 @@ Run one command from your laptop. It connects to your Databricks workspace via t
 
 ```bash
 git clone https://github.com/AnanyaDBJ/databricks-ai-workshops.git
-cd databricks-ai-workshops
+cd databricks-ai-workshops          # ← the repo root; run every step from here
 ```
 
 ### Step 1: Authenticate
@@ -71,22 +76,53 @@ databricks current-user me --profile DEFAULT
 
 ### Step 2: Install dependencies
 
+From the repo root (no `cd`):
+
 ```bash
-cd data
-pip install -r requirements.txt
+pip install -r data/requirements.txt
 ```
 
 ### Step 3: Run setup (one command)
 
+Still from the repo root — the `data/` prefix is intentional:
+
 ```bash
-python local_cli_setup_script/setup.py \
+python data/local_cli_setup_script/setup.py \
   --industry retail \
   --catalog <CATALOG> \
   --schema <SCHEMA> \
   --profile DEFAULT
 ```
 
+> The script figures out its own location, so it reads the workshop documents and data
+> correctly no matter what — the only requirement is that **you** run it with the path
+> above from the repo root, so your shell can find the file.
+
 Replace `<CATALOG>` and `<SCHEMA>` with names you choose (e.g. `my_catalog` and `retail_agent`). Swap `--industry` for `education` or `financial_services` if you prefer. The first available SQL warehouse is auto-detected (a running one is preferred) — pass `--warehouse-id <id>` only to pin a specific warehouse (find IDs with `databricks warehouses list --profile DEFAULT`).
+
+**You'll be prompted to name each resource.** The script proposes a sensible default for the Vector Search index, Vector Search endpoint, document chunk table, Genie Space, and MLflow experiment — **press Enter to accept each default**, or type your own name to override:
+
+```
+=== Resource names (press Enter to accept each default) ===
+  Document chunk table name [policy_docs_chunked]:
+  Vector Search index name [policy_docs_index]: my_docs_index
+  Vector Search endpoint name [retail-vs-retail-agent]:
+  Genie Space name [FreshMart Data (retail_agent)]:
+  MLflow experiment name [freshmart-agent-workshop]:
+```
+
+Prefer to set names up front (or run unattended)? Pass any of these flags to skip that prompt, and add `--non-interactive` to accept all remaining defaults without prompting:
+
+```bash
+python data/local_cli_setup_script/setup.py \
+  --industry retail --catalog <CATALOG> --schema <SCHEMA> --profile DEFAULT \
+  --vs-index-name my_docs_index \
+  --vs-endpoint-name my_endpoint \
+  --chunk-table-name my_doc_chunks \
+  --genie-title "My Store Assistant" \
+  --experiment-name my-agent-experiment \
+  --non-interactive
+```
 
 This creates the catalog and schema, then all six setup steps: data tables, chunked documents, the Vector Search endpoint + index, a Genie Space, and an MLflow experiment. The Vector Search step takes 5–10 minutes to provision.
 
@@ -114,7 +150,7 @@ Go to your workshop level:
 | Level | Next step |
 |-------|-----------|
 | Simple (L100) | [`simple/LAB_GUIDE.md`](../simple/LAB_GUIDE.md) |
-| Medium (L200) | [`medium/lab_instructions/SETUP_GUIDE.md`](../medium/lab_instructions/SETUP_GUIDE.md) |
+| Medium (L200) | [`medium/WORKSHOP_INSTRUCTIONS.md`](../medium/WORKSHOP_INSTRUCTIONS.md) |
 | Advanced (L300) | [`advanced/WORKSHOP_INSTRUCTIONS.md`](../advanced/WORKSHOP_INSTRUCTIONS.md) |
 
 ---
@@ -137,7 +173,8 @@ Navigate to `data/workspace_setup_script/01_quickstart_setup.py` and open it.
 ### Step 2: Configure and run
 
 1. At the top, set the **Industry**, **Catalog**, and **Schema** widgets.
-2. Click **Run All** and wait ~10–15 minutes (most of the time is Vector Search provisioning). The first available SQL warehouse is auto-detected.
+2. Optionally set the resource-name widgets — **Vector Search Index/Endpoint Name**, **Document Chunk Table Name**, **Genie Space Name**, **MLflow Experiment Name**. Leave any of these **blank to accept the default** for that resource (same as pressing Enter in the CLI).
+3. Click **Run All** and wait ~10–15 minutes (most of the time is Vector Search provisioning). The first available SQL warehouse is auto-detected.
 
 > The notebook writes data through a SQL warehouse (not Spark), so make sure one is running.
 
@@ -165,7 +202,7 @@ Go to your workshop level:
 | Level | Next step |
 |-------|-----------|
 | Simple (L100) | [`simple/LAB_GUIDE.md`](../simple/LAB_GUIDE.md) |
-| Medium (L200) | [`medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md`](../medium/lab_instructions/SETUP_GUIDE_WORKSPACE_ONLY.md) |
+| Medium (L200) | [`medium/WORKSHOP_INSTRUCTIONS_WORKSPACE.md`](../medium/WORKSHOP_INSTRUCTIONS_WORKSPACE.md) |
 | Advanced (L300) | [`advanced/WORKSHOP_INSTRUCTIONS.md`](../advanced/WORKSHOP_INSTRUCTIONS.md) |
 
 ---
@@ -190,6 +227,7 @@ For example, `retail` creates ~200 customers, ~500 products, 10 stores, 2,000 tr
 
 | Issue | Fix |
 |-------|-----|
+| `can't open file '.../setup.py'` / `No such file or directory` | You're in the wrong directory. Run every Path A command from the **repo root** (`databricks-ai-workshops/`) using the `data/...` paths shown — don't `cd` into subfolders |
 | `JSONDecodeError` or auth errors | Auth expired — run `databricks auth login --host https://<your-workspace-url> --profile DEFAULT` again |
 | No SQL warehouse found / `WAREHOUSE_NOT_FOUND` | Start a SQL warehouse (Compute → SQL Warehouses), then re-run. The CLI also accepts `--warehouse-id <id>` to pin a specific warehouse |
 | Vector Search step times out | The endpoint can take 10+ minutes — re-run, setup is idempotent |

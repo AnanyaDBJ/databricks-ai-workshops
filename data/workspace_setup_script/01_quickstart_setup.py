@@ -67,9 +67,30 @@ if "catalog" not in dbutils.widgets.getAll():
 if "schema" not in dbutils.widgets.getAll():
     dbutils.widgets.text("schema", "", "Schema Name")
 
+# Optional resource-name overrides. Leave any of these blank to accept the
+# default shown for that resource (same behavior as the CLI's Enter-to-accept).
+for _wname, _wlabel in [
+    ("vs_index_name", "Vector Search Index Name (blank = default)"),
+    ("vs_endpoint_name", "Vector Search Endpoint Name (blank = default)"),
+    ("chunk_table_name", "Document Chunk Table Name (blank = default)"),
+    ("genie_title", "Genie Space Name (blank = default)"),
+    ("experiment_name", "MLflow Experiment Name (blank = default)"),
+]:
+    if _wname not in dbutils.widgets.getAll():
+        dbutils.widgets.text(_wname, "", _wlabel)
+
 INDUSTRY = dbutils.widgets.get("industry")
 CATALOG = dbutils.widgets.get("catalog")
 SCHEMA = dbutils.widgets.get("schema")
+
+# Resource-name overrides (blank string means "use the default").
+NAME_OVERRIDES = {
+    "doc_index_name": dbutils.widgets.get("vs_index_name").strip(),
+    "vs_endpoint_name": dbutils.widgets.get("vs_endpoint_name").strip(),
+    "chunk_table_name": dbutils.widgets.get("chunk_table_name").strip(),
+    "genie_title": dbutils.widgets.get("genie_title").strip(),
+    "mlflow_experiment_suffix": dbutils.widgets.get("experiment_name").strip(),
+}
 
 if not CATALOG:
     raise ValueError(
@@ -150,6 +171,11 @@ workshop = generate_workshop_data(
     writer=writer,
     seed=42,
 )
+
+# Apply any resource-name overrides from the widgets (blank = keep the default).
+for _attr, _value in NAME_OVERRIDES.items():
+    if _value:
+        setattr(workshop, _attr, _value)
 
 tables = workshop.tables
 print(f"\n{workshop.brand_name}: created tables {tables}")
