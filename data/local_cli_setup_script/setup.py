@@ -37,7 +37,62 @@ if _DATA_ROOT not in sys.path:
     sys.path.insert(0, _DATA_ROOT)
 
 from lib.chunking import build_chunk_table
-from lib.generate import INDUSTRIES, SqlTableWriter, generate_workshop_data
+from lib.generate import (
+    INDUSTRIES,
+    SqlTableWriter,
+    generate_workshop_data,
+    get_vertical,
+)
+from verticals.base import vs_endpoint_name
+
+
+def _prompt_default(label: str, default: str, override: str | None, interactive: bool) -> str:
+    """Resolve a resource name: CLI override wins; else prompt with a prepopulated
+    default (Enter accepts it); else (non-interactive) use the default."""
+    if override is not None:
+        return override
+    if not interactive:
+        return default
+    entered = input(f"  {label} [{default}]: ").strip()
+    return entered or default
+
+
+def _resolve_resource_names(args, interactive: bool) -> dict:
+    """Compute default resource names for the chosen industry/schema, then let the
+    user override each one (or press Enter to accept the default)."""
+    vertical = get_vertical(args.industry)
+    defaults = {
+        "chunk_table_name": vertical.chunk_table_name,
+        "doc_index_name": vertical.doc_index_name,
+        "vs_endpoint_name": vs_endpoint_name(args.industry, args.schema),
+        "genie_title": vertical.genie_title(args.schema),
+        "mlflow_experiment_suffix": vertical.mlflow_experiment_suffix,
+    }
+
+    if interactive:
+        print("=== Resource names (press Enter to accept each default) ===")
+    return {
+        "chunk_table_name": _prompt_default(
+            "Document chunk table name", defaults["chunk_table_name"],
+            args.chunk_table_name, interactive,
+        ),
+        "doc_index_name": _prompt_default(
+            "Vector Search index name", defaults["doc_index_name"],
+            args.vs_index_name, interactive,
+        ),
+        "vs_endpoint_name": _prompt_default(
+            "Vector Search endpoint name", defaults["vs_endpoint_name"],
+            args.vs_endpoint_name, interactive,
+        ),
+        "genie_title": _prompt_default(
+            "Genie Space name", defaults["genie_title"],
+            args.genie_title, interactive,
+        ),
+        "mlflow_experiment_suffix": _prompt_default(
+            "MLflow experiment name", defaults["mlflow_experiment_suffix"],
+            args.experiment_name, interactive,
+        ),
+    }
 
 
 def main():
@@ -55,7 +110,23 @@ def main():
     p.add_argument("--skip-vector-search", action="store_true")
     p.add_argument("--skip-genie", action="store_true")
     p.add_argument("--skip-mlflow", action="store_true")
+    # Resource-name overrides. If omitted (and running interactively) the script
+    # prompts with a prepopulated default; pass a value here to set it directly.
+    p.add_argument("--vs-index-name", default=None, help="Vector Search index name")
+    p.add_argument("--vs-endpoint-name", default=None, help="Vector Search endpoint name")
+    p.add_argument("--chunk-table-name", default=None, help="Document chunk table name")
+    p.add_argument("--genie-title", default=None, help="Genie Space name")
+    p.add_argument("--experiment-name", default=None, help="MLflow experiment name (suffix under /Users/<you>/)")
+    p.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Never prompt; accept all default names (for CI). Overrides still apply.",
+    )
     args = p.parse_args()
+
+    # Prompt for resource names unless told not to (or stdin isn't a TTY, e.g. CI).
+    interactive = sys.stdin.isatty() and not args.non_interactive
+    names = _resolve_resource_names(args, interactive)
 
     full_schema = f"{args.catalog}.{args.schema}"
     writer = SqlTableWriter.from_profile(args.profile, args.warehouse_id)
@@ -77,6 +148,14 @@ def main():
         writer=writer,
         seed=args.seed,
     )
+
+    # Apply the resolved (possibly user-overridden) resource names to the derived
+    # resources created in Steps 3-6. Core industry table names are unchanged.
+    workshop.chunk_table_name = names["chunk_table_name"]
+    workshop.doc_index_name = names["doc_index_name"]
+    workshop.vs_endpoint_name = names["vs_endpoint_name"]
+    workshop.genie_title = names["genie_title"]
+    workshop.mlflow_experiment_suffix = names["mlflow_experiment_suffix"]
 
     # ── Step 3: Chunked docs ────────────────────────────────────────────
     print("\n=== Step 3: Chunked documents ===")

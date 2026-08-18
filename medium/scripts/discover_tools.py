@@ -173,13 +173,20 @@ def discover_vector_search_indexes(w: WorkspaceClient) -> List[Dict[str, Any]]:
                 # List indexes for each endpoint
                 endpoint_indexes = list(w.vector_search_indexes.list_indexes(endpoint_name=endpoint.name))
                 for idx in endpoint_indexes:
+                    # list_indexes() returns lightweight MiniVectorIndex objects, which
+                    # do NOT carry a `.status` attribute (only get_index does). Access
+                    # every field defensively so one missing attribute can't drop the
+                    # whole endpoint's indexes via the `except: continue` below.
+                    idx_type = getattr(idx, "index_type", None)
+                    idx_status = getattr(idx, "status", None)
+                    idx_state = getattr(idx_status, "state", None) if idx_status else None
                     indexes.append({
                         "type": "vector_search_index",
                         "name": idx.name,
                         "endpoint": endpoint.name,
-                        "primary_key": idx.primary_key,
-                        "index_type": idx.index_type.value if idx.index_type else None,
-                        "status": idx.status.state.value if idx.status and idx.status.state else None,
+                        "primary_key": getattr(idx, "primary_key", None),
+                        "index_type": idx_type.value if idx_type is not None else None,
+                        "status": idx_state.value if idx_state is not None else None,
                     })
             except Exception as e:
                 # Skip endpoints we can't access

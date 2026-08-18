@@ -92,6 +92,13 @@ def _grant_permissions(client, grantee: str, memory_type: str):
     for schema, tables in MEMORY_TYPE_SCHEMAS[memory_type].items():
         schema_tables.setdefault(schema, []).extend(tables)
 
+    # Grant USAGE + CREATE on `public` too. Postgres 15+ revokes CREATE on public
+    # from non-owners by default, and the agent's memory session can fall back to
+    # creating tables there — without this the deployed app crashes with
+    # "permission denied for schema public". No table list: the SP owns whatever
+    # it creates, so schema-level CREATE is enough.
+    schema_tables.setdefault("public", [])
+
     schema_privileges = [SchemaPrivilege.USAGE, SchemaPrivilege.CREATE]
     table_privileges = [
         TablePrivilege.SELECT,
@@ -143,6 +150,44 @@ def _grant_permissions(client, grantee: str, memory_type: str):
         "exist yet, that's expected on a fresh branch — they'll be created on first "
         "agent usage. Re-run this script after the first run to grant remaining permissions."
     )
+
+
+def run_lakebase_grants(
+    sp_client_id: str,
+    memory_type: str,
+    instance_name: str | None = None,
+    project: str | None = None,
+    branch: str | None = None,
+) -> None:
+    """Connect to Lakebase, ensure the SP role exists, and grant all permissions.
+
+    Importable entry point used by both this script's ``main()`` and ``grant_all.py``.
+    Exactly one of (instance_name) or (project + branch) must be provided.
+    """
+    from databricks_ai_bridge.lakebase import LakebaseClient
+
+    with LakebaseClient(
+        instance_name=instance_name or None,
+        project=project or None,
+        branch=branch or None,
+    ) as client:
+        if instance_name:
+            print(f"Using provisioned instance: {instance_name}")
+        else:
+            print(f"Using autoscaling project: {project}, branch: {branch}")
+        print(f"Memory type: {memory_type}")
+
+        print(f"Creating role for SP {sp_client_id}...")
+        try:
+            client.create_role(sp_client_id, "SERVICE_PRINCIPAL")
+            print("  Role created.")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                print("  Role already exists, skipping.")
+            else:
+                raise
+
+        _grant_permissions(client, sp_client_id, memory_type)
 
 
 def main():
@@ -214,31 +259,13 @@ def main():
         )
         sys.exit(1)
 
-    from databricks_ai_bridge.lakebase import LakebaseClient
-
-    with LakebaseClient(
-        instance_name=args.instance_name or None,
-        project=args.project or None,
-        branch=args.branch or None,
-    ) as client:
-        if has_provisioned:
-            print(f"Using provisioned instance: {args.instance_name}")
-        else:
-            print(f"Using autoscaling project: {args.project}, branch: {args.branch}")
-        print(f"Memory type: {args.memory_type}")
-
-        grantee = args.sp_client_id
-        print(f"Creating role for SP {grantee}...")
-        try:
-            client.create_role(grantee, "SERVICE_PRINCIPAL")
-            print("  Role created.")
-        except Exception as e:
-            if "already exists" in str(e).lower():
-                print("  Role already exists, skipping.")
-            else:
-                raise
-
-        _grant_permissions(client, grantee, args.memory_type)
+    run_lakebase_grants(
+        sp_client_id=args.sp_client_id,
+        memory_type=args.memory_type,
+        instance_name=args.instance_name if has_provisioned else None,
+        project=args.project if has_autoscaling else None,
+        branch=args.branch if has_autoscaling else None,
+    )
 
 
 if __name__ == "__main__":
