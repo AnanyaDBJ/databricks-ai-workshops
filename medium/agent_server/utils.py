@@ -40,12 +40,24 @@ class LakebaseConfig:
         return "not configured"
 
 
+def _env_or_none(key: str) -> Optional[str]:
+    """Return the env var, or None when it's unset or blank.
+
+    Setup writes the unused Lakebase mode as an empty string (e.g.
+    ``LAKEBASE_INSTANCE_NAME=`` when using autoscaling). An empty string is not
+    None, so passing it through would make AsyncDatabricksSession think both the
+    provisioned and autoscaling modes were requested and reject the combination.
+    """
+    value = os.environ.get(key)
+    return value.strip() if value and value.strip() else None
+
+
 def init_lakebase_config() -> Optional[LakebaseConfig]:
     config = LakebaseConfig(
-        instance_name=os.environ.get("LAKEBASE_INSTANCE_NAME"),
-        autoscaling_endpoint=os.environ.get("LAKEBASE_AUTOSCALING_ENDPOINT"),
-        autoscaling_project=os.environ.get("LAKEBASE_AUTOSCALING_PROJECT"),
-        autoscaling_branch=os.environ.get("LAKEBASE_AUTOSCALING_BRANCH"),
+        instance_name=_env_or_none("LAKEBASE_INSTANCE_NAME"),
+        autoscaling_endpoint=_env_or_none("LAKEBASE_AUTOSCALING_ENDPOINT"),
+        autoscaling_project=_env_or_none("LAKEBASE_AUTOSCALING_PROJECT"),
+        autoscaling_branch=_env_or_none("LAKEBASE_AUTOSCALING_BRANCH"),
         memory_schema=os.environ.get("LAKEBASE_AGENT_MEMORY_SCHEMA", "agent_openai_memory"),
     )
     if not config.is_configured:
