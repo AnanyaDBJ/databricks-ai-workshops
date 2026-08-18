@@ -14,6 +14,8 @@ The setup is script-driven: you provide your resources one prompt at a time and 
 | uv | [install guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | Node.js 20+ | [nodejs.org](https://nodejs.org) |
 
+> **No `uv`?** It's only the local runner — deployment uses it on the app's own compute regardless. Run `pip install -e .` once (Python 3.12), then use the bare command names (`quickstart`, `configure-agent`, `grant-all`, `start-app`) wherever this guide says `uv run …`. Full steps: [`MANUAL_SETUP.md` → Running without uv](./MANUAL_SETUP.md#running-without-uv).
+
 Your workspace needs: Unity Catalog, Databricks Apps, Lakebase, Vector Search, and Foundation Model API.
 
 ### Data setup (required first)

@@ -24,6 +24,44 @@ phases are independent.
 
 ---
 
+## Running without uv
+
+`uv` is only the local runner — **the deployed Databricks App runs `uv run start-app` on
+its own compute, which already has uv, so deployment never depends on your machine.** If you
+can't use `uv` locally, use plain `pip` instead. Everywhere this repo says `uv run <cmd>`,
+do this once:
+
+```bash
+cd medium
+python3.12 -m venv .venv && source .venv/bin/activate   # Python 3.12 (what the project targets)
+pip install -e .        # installs deps + the commands: setup, quickstart, configure-agent,
+                        # grant-all, start-app, start-server, agent-evaluate, discover-tools, preflight
+```
+
+Then use the **bare command name** in place of `uv run <cmd>`:
+
+| Instead of | Run |
+|---|---|
+| `uv run quickstart --profile DEFAULT` | `quickstart --profile DEFAULT` |
+| `uv run configure-agent` | `configure-agent` |
+| `uv run grant-all` | `grant-all` |
+| `uv run start-app` | `start-app` |
+
+Or run the files directly without installing the console scripts (still `pip install -e .`
+first for dependencies):
+
+```bash
+python scripts/quickstart.py --profile DEFAULT
+python scripts/configure_agent.py
+python scripts/grant_all.py
+python scripts/start_app.py          # or: python -m agent_server.start_server (backend only)
+```
+
+Caveats: use **Python 3.12** (a mismatch may fail to resolve deps), and the frontend still
+needs **Node.js 20+** regardless — `uv`/`pip` only handle the Python side.
+
+---
+
 ## Authentication & profile
 
 Replaces the auth portion of `quickstart`.

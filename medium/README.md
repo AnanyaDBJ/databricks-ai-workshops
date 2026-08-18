@@ -26,6 +26,8 @@ An AI-powered conversational agent using the OpenAI Agents SDK with Genie, Vecto
 
 Setup is script-driven and input-driven — you supply your resources one prompt at a time. If a script fails in your environment, **[`MANUAL_SETUP.md`](./MANUAL_SETUP.md)** reproduces every step by hand.
 
+> **No `uv`?** `uv` is only the local runner (deployment uses it on the app's own compute regardless). Run `pip install -e .` once with Python 3.12, then use the bare command names (`quickstart`, `configure-agent`, …) instead of `uv run …`. See [`MANUAL_SETUP.md` → Running without uv](./MANUAL_SETUP.md#running-without-uv).
+
 ## Project Structure
 
 ```

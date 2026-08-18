@@ -61,6 +61,7 @@ Note these values from the output — you'll paste them when the scripts prompt 
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh && source $HOME/.local/bin/env
    ```
+   > **No `uv`?** Use plain pip instead — `pip install -e .` (Python 3.12), then run the bare command names (`quickstart`, `configure-agent`, `grant-all`, `start-app`) wherever this guide says `uv run …`. Full steps: [`MANUAL_SETUP.md` → Running without uv](./MANUAL_SETUP.md#running-without-uv).
 
 > Prefer not to use scripts at all? Follow **[`MANUAL_SETUP.md`](./MANUAL_SETUP.md)** end to end instead — it covers every step through the UI, SQL Editor, and file editor.
 
