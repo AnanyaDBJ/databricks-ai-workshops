@@ -38,12 +38,33 @@
 
 # COMMAND ----------
 
-import mlflow
-mlflow.__version__
+# Create parameter widgets
+try:
+    dbutils.widgets.text("app_name", "", "App Name")
+    dbutils.widgets.text("lakebase_project", "", "Lakebase Project Name")
+    dbutils.widgets.text("catalog", "", "Unity Catalog Name")
+    dbutils.widgets.text("schema", "", "Schema Name")
+    dbutils.widgets.text("vs_index", "", "Vector Search Index")
+    dbutils.widgets.text("genie_space_id", "", "Genie Space ID")
+    dbutils.widgets.text("experiment_id", "", "Experiment ID (optional)")
+    dbutils.widgets.text("agent_name", "AI Agent Assistant", "Agent Display Name")
+    dbutils.widgets.text("system_prompt", "You are a helpful AI assistant.", "System Prompt")
+    dbutils.widgets.text("ai_gateway_endpoint", "", "AI Gateway Endpoint (optional)")
+    print("✓ Configuration widgets created at the top of the notebook")
+except Exception as e:
+    # Widgets may already exist from a previous run
+    if "already exists" not in str(e).lower():
+        raise
+    print("✓ Configuration widgets already exist")
+
+print("\n" + "="*60)
+print("NEXT STEP: Fill in the required widget values above, then run this cell again.")
+print("="*60)
 
 # COMMAND ----------
 
 # DBTITLE 1,Configuration Widgets
+
 # Read parameter values (set via the parameter widgets at the top of the notebook)
 APP_NAME = dbutils.widgets.get("app_name").strip()
 LAKEBASE_PROJECT = dbutils.widgets.get("lakebase_project").strip()
@@ -65,9 +86,11 @@ if not VS_INDEX: missing.append("Vector Search Index")
 if not GENIE_SPACE_ID: missing.append("Genie Space ID")
 
 if missing:
-    raise ValueError(
-        f"Fill in the following widgets at the top of the notebook, then Run All again: {', '.join(missing)}"
-    )
+    print("\n⚠ Missing required values:")
+    for m in missing:
+        print(f"  - {m}")
+    print("\nFill in the widgets above, then re-run this cell.")
+    dbutils.notebook.exit("Configuration incomplete - please fill in the required widgets")
 
 # Derive paths
 import os
@@ -76,6 +99,9 @@ _nb_path = dbutils.entry_point.getDbutils().notebook().getContext().notebookPath
 PROJECT_ROOT = "/Workspace" + "/".join(_nb_path.split("/")[:-2])
 SOURCE_CODE_PATH = PROJECT_ROOT
 
+print("\n" + "="*60)
+print("✓ Configuration validated successfully")
+print("="*60)
 print(f"App Name:          {APP_NAME}")
 print(f"Lakebase Project:  {LAKEBASE_PROJECT}")
 print(f"Catalog.Schema:    {CATALOG}.{SCHEMA}")
@@ -304,6 +330,34 @@ with open(yml_path, "w") as f:
     yaml.dump(bundle_config, f, default_flow_style=False, sort_keys=False)
 
 print("\u2713 databricks.yml updated")
+
+# ========================================
+# Update app.yaml (standalone deploy config)
+# ========================================
+app_yaml_path = os.path.join(PROJECT_ROOT, "app.yaml")
+if os.path.exists(app_yaml_path):
+    with open(app_yaml_path, "r") as f:
+        app_config = yaml.safe_load(f)
+    
+    # Update the AGENT_MODEL and AGENT_USE_AI_GATEWAY env vars
+    for env_var in app_config.get("env", []):
+        if env_var["name"] == "AGENT_MODEL":
+            env_var["value"] = AGENT_MODEL
+        elif env_var["name"] == "AGENT_USE_AI_GATEWAY":
+            env_var["value"] = str(USE_AI_GATEWAY).lower()
+    
+    # Write back
+    with open(app_yaml_path, "w") as f:
+        yaml.dump(app_config, f, default_flow_style=False, sort_keys=False)
+    
+    print("\u2713 app.yaml updated")
+else:
+    print("\u26a0 app.yaml not found (skipped)")
+
+# Summary
+print("\n" + "="*60)
+print("Configuration Summary")
+print("="*60)
 print(f"  App name:      {APP_NAME}")
 print(f"  Experiment:    {EXPERIMENT_ID}")
 print(f"  Lakebase:      {LAKEBASE_BRANCH}")
