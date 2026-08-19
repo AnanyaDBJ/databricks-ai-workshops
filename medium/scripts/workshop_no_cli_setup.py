@@ -44,7 +44,7 @@ try:
     dbutils.widgets.text("lakebase_project", "", "Lakebase Project Name")
     dbutils.widgets.text("catalog", "", "Unity Catalog Name")
     dbutils.widgets.text("schema", "", "Schema Name")
-    dbutils.widgets.text("vs_index", "", "Vector Search Index")
+    dbutils.widgets.text("vs_index", "", "Vector Search index (name only, or catalog.schema.index)")
     dbutils.widgets.text("genie_space_id", "", "Genie Space ID")
     dbutils.widgets.text("experiment_id", "", "Experiment ID (optional)")
     dbutils.widgets.text("agent_name", "AI Agent Assistant", "Agent Display Name")
@@ -251,8 +251,14 @@ print(f"\nExperiment ID: {EXPERIMENT_ID}")
 # COMMAND ----------
 
 # DBTITLE 1,Step 4: Configure agent_server/agent.py
-# Build the MCP server URLs from user inputs
-# Rule: Vector Search dots become slashes in the URL path
+# Build the MCP server URLs from user inputs.
+# Vector Search needs the fully-qualified index (catalog.schema.index). If only a bare name
+# (or schema.index) was entered, qualify it with the Catalog + Schema widgets so the MCP URL
+# always has the full catalog/schema/index path — otherwise the agent's tool has no schema.
+if VS_INDEX.count(".") < 2:
+    VS_INDEX = f"{CATALOG}.{SCHEMA}.{VS_INDEX.split('.')[-1]}"
+    print(f"Qualified Vector Search index to: {VS_INDEX}")
+# Rule: Vector Search dots become slashes in the URL path.
 vs_url_path = "/api/2.0/mcp/vector-search/" + VS_INDEX.replace(".", "/")
 genie_url_path = f"/api/2.0/mcp/genie/{GENIE_SPACE_ID}"
 
