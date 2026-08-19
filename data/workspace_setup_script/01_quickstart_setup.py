@@ -44,6 +44,42 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Create the input widgets — fill these, then Run All
+# Create the widgets in their own cell that finishes cleanly, so the widget bar reliably
+# renders at the top of the notebook. (When creation shares a cell with the validation below,
+# the cell raises before finishing on the first run and the widgets may never paint — which is
+# why they can look like they "don't come up".) Fill in Catalog and Schema at the top, then
+# click Run All. The next cell reads and validates them.
+import sys as _sys
+
+_nb_w = dbutils.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+_data_root_w = "/Workspace" + "/".join(_nb_w.split("/")[:-2])
+if _data_root_w not in _sys.path:
+    _sys.path.insert(0, _data_root_w)
+from verticals.registry import INDUSTRIES as _INDUSTRIES
+
+try:
+    if "industry" not in dbutils.widgets.getAll():
+        dbutils.widgets.dropdown("industry", "education", list(_INDUSTRIES), "Industry")
+    if "catalog" not in dbutils.widgets.getAll():
+        dbutils.widgets.text("catalog", "", "Catalog Name")
+    if "schema" not in dbutils.widgets.getAll():
+        dbutils.widgets.text("schema", "", "Schema Name")
+    for _wname, _wlabel in [
+        ("vs_index_name", "Vector Search Index Name (blank = default)"),
+        ("vs_endpoint_name", "Vector Search Endpoint Name (blank = default)"),
+        ("chunk_table_name", "Document Chunk Table Name (blank = default)"),
+        ("genie_title", "Genie Space Name (blank = default)"),
+        ("experiment_name", "MLflow Experiment Name (blank = default)"),
+    ]:
+        if _wname not in dbutils.widgets.getAll():
+            dbutils.widgets.text(_wname, "", _wlabel)
+    print("✓ Widgets ready. Fill in Catalog and Schema at the top, then click Run All.")
+except Exception as _e:
+    print(f"Widget setup note: {_e}")
+
+# COMMAND ----------
+
 import sys
 
 
