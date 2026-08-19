@@ -118,7 +118,7 @@ class SqlTableWriter:
         self.exec_sql(f"CREATE OR REPLACE TABLE {fqn} ({table.ddl()})")
         self._insert_rows(fqn, table)
 
-    def _insert_rows(self, fqn: str, table: TableData, batch_size: int = 100) -> None:
+    def _insert_rows(self, fqn: str, table: TableData, batch_size: int = 1000) -> None:
         col_str = ", ".join(f"`{c}`" for c, _ in table.columns)
         values = [
             "(" + ", ".join(_sql_literal(row.get(c), t) for c, t in table.columns) + ")"
