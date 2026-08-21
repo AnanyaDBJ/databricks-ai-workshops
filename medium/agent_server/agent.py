@@ -22,9 +22,11 @@ from agent_server.utils import (
     build_mcp_url,
     create_session,
     deduplicate_input,
+    flatten_content_text,
     get_session_id,
     get_user_workspace_client,
     init_lakebase_config,
+    install_reasoning_content_normalizer,
     process_agent_stream_events,
 )
 
@@ -48,10 +50,15 @@ DEFAULT_MODEL = "databricks-claude-opus-4-6"
 
 # implement a simple change
 # NOTE: this will work for all databricks models OTHER than GPT-OSS, which uses a slightly different API
-set_default_openai_client(AsyncDatabricksOpenAI(use_ai_gateway=USE_AI_GATEWAY))
+openai_client = AsyncDatabricksOpenAI(use_ai_gateway=USE_AI_GATEWAY)
+set_default_openai_client(openai_client)
 set_default_openai_api("chat_completions")
 set_trace_processors([])  # only use mlflow for trace processing
 mlflow.openai.autolog()
+# Reasoning models (e.g. databricks-claude-opus-5) return list-shaped content that
+# the Agents SDK converter can't parse; normalize it. Install after autolog so the
+# wrapper still routes through the traced create().
+install_reasoning_content_normalizer(openai_client)
 
 # GENERATED
 
@@ -112,6 +119,7 @@ def _convert_input(request_input):
     messages = []
     for i in request_input:
         item = i.model_dump(exclude_none=True)
+        flatten_content_text(item)
         if "content" in item and isinstance(item["content"], list):
             for c in item["content"]:
                 if isinstance(c, dict) and c.get("type") == "output_text":
