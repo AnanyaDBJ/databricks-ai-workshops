@@ -92,11 +92,107 @@ def get_session_id(request: ResponsesAgentRequest) -> str:
     return str(uuid4())
 
 
+def _collect_text(value) -> str:
+    """Recursively pull the plain text out of a possibly-nested content value."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        if value.get("type") == "reasoning":
+            return ""
+        if "text" in value:
+            return _collect_text(value["text"])
+        if isinstance(value.get("content"), list):
+            return _collect_text(value["content"])
+        return ""
+    if isinstance(value, list):
+        return "".join(_collect_text(v) for v in value)
+    return ""
+
+
+def flatten_content_text(item: dict) -> dict:
+    """Normalize an assistant turn replayed by the chat UI into valid content.
+
+    Reasoning models (e.g. databricks-claude-opus-5) return a `reasoning` item
+    alongside the answer `message`. On a follow-up turn the Databricks Apps chat
+    UI echoes that whole prior turn back, packing the entire array (reasoning +
+    answer) into a single output_text's `text` field as a list rather than a
+    string. ResponseOutputText.text must be a str, so the Agents SDK rejects it.
+    Flatten any list-valued `text` back to a string (concatenating nested text,
+    dropping reasoning) so replayed history validates. Mutates and returns `item`.
+    """
+    content = item.get("content")
+    if isinstance(content, list):
+        for part in content:
+            if (
+                isinstance(part, dict)
+                and part.get("type") in ("output_text", "text", "input_text")
+                and isinstance(part.get("text"), list)
+            ):
+                part["text"] = _collect_text(part["text"])
+    return item
+
+
+def _flatten_content_value(value):
+    """A list-shaped content value -> plain string, or None when it holds no text.
+
+    Reasoning blocks contribute no text and are dropped (see flatten_content_text).
+    """
+    if isinstance(value, list):
+        return _collect_text(value) or None
+    return value
+
+
+async def _normalize_stream(stream):
+    async for chunk in stream:
+        for choice in getattr(chunk, "choices", None) or []:
+            delta = getattr(choice, "delta", None)
+            if delta is not None and isinstance(getattr(delta, "content", None), list):
+                delta.content = _flatten_content_value(delta.content)
+        yield chunk
+
+
+def install_reasoning_content_normalizer(client):
+    """Flatten Databricks reasoning models' list-shaped chat-completions content.
+
+    Once extended thinking kicks in, reasoning models (e.g. databricks-claude-opus-5)
+    return `content` as a list of blocks ([{type: reasoning...}, {type: text...}])
+    rather than a string -- both in the non-streaming response message and in the
+    first streamed chunk's delta -- while leaving `reasoning_content` empty. The
+    openai-agents chat-completions converters assume `content` is a str, so they
+    raise a ResponseOutputText validation error. Wrap create() to drop the reasoning
+    block and hand the SDK a plain string (or None) instead.
+
+    The patch is applied at the class level because databricks_openai returns a fresh
+    chat/completions object on every access, so an instance-level wrapper would be
+    discarded. Install AFTER mlflow.openai.autolog() so the wrapper calls the traced
+    method. Idempotent. Returns the same client for convenience.
+    """
+    completions_cls = type(client.chat.completions)
+    if getattr(completions_cls, "_reasoning_normalizer_installed", False):
+        return client
+    original_create = completions_cls.create
+
+    async def create(self, *args, **kwargs):
+        ret = await original_create(self, *args, **kwargs)
+        if hasattr(ret, "__aiter__"):  # streaming: an AsyncStream of chunks
+            return _normalize_stream(ret)
+        for choice in getattr(ret, "choices", None) or []:
+            message = getattr(choice, "message", None)
+            if message is not None and isinstance(getattr(message, "content", None), list):
+                message.content = _flatten_content_value(message.content)
+        return ret
+
+    completions_cls.create = create
+    completions_cls._reasoning_normalizer_installed = True
+    return client
+
+
 async def deduplicate_input(
     request: ResponsesAgentRequest, session: AsyncDatabricksSession
 ) -> list[dict]:
     messages = [i.model_dump() for i in request.input]
     for msg in messages:
+        flatten_content_text(msg)
         if (
             msg.get("type") == "message"
             and msg.get("role") == "assistant"
